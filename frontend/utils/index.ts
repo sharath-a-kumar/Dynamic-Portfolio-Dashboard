@@ -12,3 +12,16 @@ export {
   formatGainLossWithSign,
   type GainLossColorType,
 } from './gainLossColors';
+
+export {
+  parseError,
+  parseApiErrors,
+  isNetworkError,
+  isRateLimitError,
+  isYahooFinanceError,
+  isGoogleFinanceError,
+  getHttpErrorMessage,
+  formatErrorForDisplay,
+  type ErrorSource,
+  type ParsedError,
+} from './errorUtils';

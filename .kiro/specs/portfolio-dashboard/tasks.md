@@ -242,7 +242,8 @@
 
 
 
-- [x] 15. Implement SectorGroup component
+- [ ] 15. Implement SectorGroup component
+
 
 
   - Create sector header with sector name
@@ -252,7 +253,12 @@
   - Apply color coding to sector Gain/Loss
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
+
 - [ ] 16. Implement main Dashboard page
+
+
+
+
   - Create Next.js page component
   - Integrate usePortfolio hook
   - Render portfolio grouped by sectors
@@ -261,6 +267,15 @@
   - _Requirements: 1.1, 6.1_
 
 - [ ] 17. Implement AutoRefresh component
+
+
+
+
+
+
+
+
+
   - Create component with configurable interval
   - Set up interval timer for 15-second refresh
   - Clean up timer on component unmount
@@ -268,7 +283,11 @@
   - Add visual indicator for auto-refresh status
   - _Requirements: 4.1, 4.4, 4.5_
 
-- [ ] 18. Implement error handling UI
+- [x] 18. Implement error handling UI
+
+
+
+
   - Create ErrorBoundary component for React errors
   - Create error toast notification component
   - Display specific error messages for Yahoo Finance failures
