@@ -8,17 +8,26 @@
 
 
   - Create Next.js project with TypeScript and Tailwind CSS
-  - Create Node.js backend project with Express and TypeScript
+  - Create Node.js backend project with Express (JavaScript)
   - Install required dependencies (axios, xlsx, cheerio, node-cache, fast-check)
   - Set up project folder structure for both frontend and backend
-  - Configure TypeScript for both projects
+  - Configure TypeScript for frontend project
   - Set up environment variable files (.env.local for frontend, .env for backend)
   - _Requirements: 9.2, 10.4_
 
-- [ ] 2. Implement data models and types
-  - Create TypeScript interfaces for Holding, SectorSummary, ApiError, ExcelRow
-  - Create utility types for API responses
-  - Create validation schemas for data models
+- [x] 2. Implement data models and types
+
+
+
+
+
+
+
+
+  - Create TypeScript interfaces for frontend (Holding, SectorSummary, ApiError, ExcelRow)
+  - Create JavaScript data model factories/validators for backend
+  - Create utility types for API responses (frontend)
+  - Create validation functions for data models (backend)
   - _Requirements: 1.2, 11.2_
 
 - [ ] 3. Implement Excel parsing service
