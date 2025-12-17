@@ -188,7 +188,10 @@
 - [ ] 11. Checkpoint - Ensure backend tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Create frontend data fetching hooks
+- [x] 12. Create frontend data fetching hooks
+
+
+
   - Create usePortfolio hook using React Query
   - Implement automatic refetching every 15 seconds
   - Add manual refresh functionality
