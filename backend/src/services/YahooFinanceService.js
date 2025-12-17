@@ -1,5 +1,4 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+import YahooFinance from 'yahoo-finance2';
 import { createYahooError } from '../models/ApiError.js';
 
 /**
@@ -20,15 +19,11 @@ class YahooFinanceService {
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
     this.cacheTTL = options.cacheTTL || 10; // 10 seconds default
-    this.maxRetries = options.maxRetries || 3;
-    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
-    this.timeout = options.timeout || 5000; // 5 seconds
+    this.maxRetries = options.maxRetries || 1; // Reduced retries for faster loading
+    this.initialRetryDelay = options.initialRetryDelay || 500; // 500ms
     
-    // Rate limiting
-    this.requestQueue = [];
-    this.isProcessingQueue = false;
-    this.minRequestInterval = options.minRequestInterval || 100; // 100ms between requests
-    this.lastRequestTime = 0;
+    // Initialize yahoo-finance2 instance
+    this.yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
   }
 
   /**
@@ -54,13 +49,15 @@ class YahooFinanceService {
     const price = await this._fetchPriceWithRetry(symbol);
     
     // Cache the result
-    this.cacheService.set(cacheKey, price, this.cacheTTL);
+    if (price !== null) {
+      this.cacheService.set(cacheKey, price, this.cacheTTL);
+    }
     
     return price;
   }
 
   /**
-   * Get prices for multiple stock symbols in batch
+   * Get prices for multiple stock symbols in batch (single API call)
    * @param {string[]} symbols - Array of stock symbols
    * @returns {Promise<Map<string, number>>} Map of symbol to price
    */
@@ -69,29 +66,68 @@ class YahooFinanceService {
       return new Map();
     }
 
-    // Filter out invalid symbols
+    // Filter out invalid symbols and check cache
     const validSymbols = symbols.filter(s => s && typeof s === 'string');
     
     if (validSymbols.length === 0) {
       return new Map();
     }
 
-    // Fetch prices in parallel with rate limiting
-    const pricePromises = validSymbols.map(symbol => 
-      this._queueRequest(() => this.getCurrentPrice(symbol))
-        .then(price => ({ symbol, price, error: null }))
-        .catch(error => ({ symbol, price: null, error }))
-    );
-
-    const results = await Promise.all(pricePromises);
-    
-    // Build result map
     const priceMap = new Map();
-    results.forEach(({ symbol, price, error }) => {
-      if (price !== null) {
-        priceMap.set(symbol, price);
+    const uncachedSymbols = [];
+
+    // Check cache first for all symbols
+    for (const symbol of validSymbols) {
+      const cacheKey = `yahoo:price:${symbol}`;
+      const cachedPrice = this.cacheService.get(cacheKey);
+      
+      if (cachedPrice !== undefined) {
+        priceMap.set(symbol, cachedPrice);
+      } else {
+        uncachedSymbols.push(symbol);
       }
-    });
+    }
+
+    // If all symbols were cached, return immediately
+    if (uncachedSymbols.length === 0) {
+      return priceMap;
+    }
+
+    // Fetch all uncached symbols in a single batch API call
+    try {
+      const quotes = await this.yahooFinance.quote(uncachedSymbols);
+      
+      // Handle both single quote and array of quotes
+      const quotesArray = Array.isArray(quotes) ? quotes : [quotes];
+      
+      for (const quote of quotesArray) {
+        if (quote && quote.symbol && quote.regularMarketPrice !== undefined) {
+          const price = quote.regularMarketPrice;
+          priceMap.set(quote.symbol, price);
+          
+          // Cache the result
+          const cacheKey = `yahoo:price:${quote.symbol}`;
+          this.cacheService.set(cacheKey, price, this.cacheTTL);
+        }
+      }
+    } catch (error) {
+      // If batch fails, fall back to individual requests
+      console.warn('Batch quote failed, falling back to individual requests:', error.message);
+      
+      const pricePromises = uncachedSymbols.map(symbol => 
+        this.getCurrentPrice(symbol)
+          .then(price => ({ symbol, price }))
+          .catch(() => ({ symbol, price: null }))
+      );
+
+      const results = await Promise.all(pricePromises);
+      
+      for (const { symbol, price } of results) {
+        if (price !== null) {
+          priceMap.set(symbol, price);
+        }
+      }
+    }
 
     return priceMap;
   }
@@ -131,133 +167,43 @@ class YahooFinanceService {
   }
 
   /**
-   * Fetch price from Yahoo Finance using web scraping
+   * Fetch price from Yahoo Finance using yahoo-finance2 library
    * @private
    * @param {string} symbol - Stock symbol
    * @returns {Promise<number>} Current market price
    */
   async _fetchPriceFromYahoo(symbol) {
     try {
-      // Yahoo Finance URL for the stock
-      const url = `https://finance.yahoo.com/quote/${symbol}`;
+      // Use yahoo-finance2 quote method
+      const quote = await this.yahooFinance.quote(symbol);
       
-      const response = await axios.get(url, {
-        timeout: this.timeout,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
-        }
-      });
-
-      // Parse HTML with cheerio
-      const $ = cheerio.load(response.data);
-      
-      // Try multiple selectors as Yahoo Finance layout can vary
-      let price = null;
-      
-      // Selector 1: fin-streamer with data-symbol attribute
-      const finStreamer = $(`fin-streamer[data-symbol="${symbol}"][data-field="regularMarketPrice"]`).attr('data-value');
-      if (finStreamer) {
-        price = parseFloat(finStreamer);
-      }
-      
-      // Selector 2: Look for price in specific div structure
-      if (!price) {
-        const priceText = $('fin-streamer[data-field="regularMarketPrice"]').first().text();
-        if (priceText) {
-          price = parseFloat(priceText.replace(/,/g, ''));
-        }
-      }
-      
-      // Selector 3: Fallback to meta tags
-      if (!price) {
-        const metaPrice = $('meta[name="price"]').attr('content');
-        if (metaPrice) {
-          price = parseFloat(metaPrice);
-        }
+      if (!quote) {
+        throw createYahooError(`No data returned for symbol: ${symbol}`, symbol);
       }
 
-      if (!price || isNaN(price)) {
-        throw createYahooError(`Unable to parse price for symbol: ${symbol}`, symbol);
+      // Get the regular market price
+      const price = quote.regularMarketPrice;
+      
+      if (price === undefined || price === null || isNaN(price)) {
+        throw createYahooError(`Unable to get price for symbol: ${symbol}`, symbol);
       }
 
       return price;
     } catch (error) {
-      if (error.response) {
-        // HTTP error
-        if (error.response.status === 404) {
-          throw createYahooError(`Symbol not found: ${symbol}`, symbol);
-        } else if (error.response.status === 429) {
-          throw createYahooError(`Rate limit exceeded for symbol: ${symbol}`, symbol);
-        } else {
-          throw createYahooError(
-            `HTTP error ${error.response.status} for symbol: ${symbol}`,
-            symbol
-          );
-        }
-      } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        throw createYahooError(`Timeout fetching price for symbol: ${symbol}`, symbol);
-      } else if (error.source === 'yahoo') {
-        // Already a Yahoo error, rethrow
+      if (error.source === 'yahoo') {
         throw error;
-      } else {
-        throw createYahooError(
-          `Failed to fetch price for ${symbol}: ${error.message}`,
-          symbol
-        );
       }
-    }
-  }
-
-  /**
-   * Queue a request to implement rate limiting
-   * @private
-   * @param {Function} requestFn - Function that returns a promise
-   * @returns {Promise} Result of the request
-   */
-  async _queueRequest(requestFn) {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({ requestFn, resolve, reject });
-      this._processQueue();
-    });
-  }
-
-  /**
-   * Process queued requests with rate limiting
-   * @private
-   */
-  async _processQueue() {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessingQueue = true;
-
-    while (this.requestQueue.length > 0) {
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
       
-      // Wait if we need to respect rate limit
-      if (timeSinceLastRequest < this.minRequestInterval) {
-        await this._sleep(this.minRequestInterval - timeSinceLastRequest);
+      // Handle yahoo-finance2 specific errors
+      if (error.message?.includes('Not Found') || error.message?.includes('no results')) {
+        throw createYahooError(`Symbol not found: ${symbol}`, symbol);
       }
-
-      const { requestFn, resolve, reject } = this.requestQueue.shift();
-      this.lastRequestTime = Date.now();
-
-      try {
-        const result = await requestFn();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
+      
+      throw createYahooError(
+        `Failed to fetch price for ${symbol}: ${error.message}`,
+        symbol
+      );
     }
-
-    this.isProcessingQueue = false;
   }
 
   /**
@@ -289,9 +235,7 @@ class YahooFinanceService {
   getStats() {
     const cacheStats = this.cacheService.getStats();
     return {
-      cache: cacheStats,
-      queueLength: this.requestQueue.length,
-      isProcessingQueue: this.isProcessingQueue
+      cache: cacheStats
     };
   }
 }

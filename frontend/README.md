@@ -41,7 +41,15 @@ frontend/
 
 ## Environment Variables
 
-- `NEXT_PUBLIC_API_URL`: Backend API URL (default: http://localhost:3001)
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL for fetching portfolio data | `http://localhost:3001` | Yes |
+
+### Configuration Notes
+
+- **NEXT_PUBLIC_API_URL**: Must include the protocol (http/https) and port number
+- Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser
+- For production, update this to your deployed backend URL
 
 ## Features
 

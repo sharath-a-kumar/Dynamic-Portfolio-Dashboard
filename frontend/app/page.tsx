@@ -245,21 +245,66 @@ function DashboardContent() {
   }, [sectorGroups]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 p-3 sm:p-4 md:p-6 lg:p-8">
       <div className="max-w-[1600px] mx-auto">
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Portfolio Dashboard
-            </h1>
-            {lastUpdated && (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-                Last updated: {new Date(lastUpdated).toLocaleString()}
-              </p>
-            )}
+        {/* Header section - Responsive layout for all screen sizes */}
+        {/* Requirements: 7.1, 7.2, 7.3, 7.4, 7.5 */}
+        <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
+          {/* Title and timestamp row */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+                Portfolio Dashboard
+              </h1>
+              {lastUpdated && (
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-0.5 sm:mt-1">
+                  Last updated: {new Date(lastUpdated).toLocaleString()}
+                </p>
+              )}
+            </div>
+            
+            {/* Controls - visible on tablet and up in header row */}
+            <div className="hidden sm:flex items-center gap-3">
+              {/* Auto-refresh indicator */}
+              <AutoRefresh
+                interval={15000}
+                onRefresh={refresh}
+                enabled={autoRefreshEnabled}
+                showIndicator={true}
+              />
+              
+              {/* Auto-refresh toggle */}
+              <button
+                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  autoRefreshEnabled
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600'
+                }`}
+                aria-label={autoRefreshEnabled ? 'Disable auto-refresh' : 'Enable auto-refresh'}
+              >
+                {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
+              </button>
+              
+              {/* Manual refresh button */}
+              <button
+                onClick={() => refresh()}
+                disabled={isRefetching}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isRefetching && (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                {isRefetching ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          
+          {/* Mobile controls row - visible only on small screens */}
+          <div className="flex sm:hidden items-center justify-between gap-2">
             {/* Auto-refresh indicator */}
             <AutoRefresh
               interval={15000}
@@ -268,48 +313,60 @@ function DashboardContent() {
               showIndicator={true}
             />
             
-            {/* Auto-refresh toggle */}
-            <button
-              onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                autoRefreshEnabled
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
-                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600'
-              }`}
-              aria-label={autoRefreshEnabled ? 'Disable auto-refresh' : 'Enable auto-refresh'}
-            >
-              {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
-            </button>
-            
-            {/* Manual refresh button */}
-            <button
-              onClick={() => refresh()}
-              disabled={isRefetching}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            >
-              {isRefetching && (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
-              {isRefetching ? 'Refreshing...' : 'Refresh'}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Auto-refresh toggle - compact on mobile */}
+              <button
+                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                className={`px-2.5 py-1.5 text-xs rounded-md transition-colors touch-manipulation ${
+                  autoRefreshEnabled
+                    ? 'bg-green-100 text-green-700 active:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-zinc-100 text-zinc-600 active:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-400'
+                }`}
+                aria-label={autoRefreshEnabled ? 'Disable auto-refresh' : 'Enable auto-refresh'}
+              >
+                {autoRefreshEnabled ? 'Auto: ON' : 'Auto: OFF'}
+              </button>
+              
+              {/* Manual refresh button - compact on mobile */}
+              <button
+                onClick={() => refresh()}
+                disabled={isRefetching}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 touch-manipulation"
+              >
+                {isRefetching ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span className="sr-only">Refreshing</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Offline Indicator - Requirement 8.3 */}
+        {/* Requirements: 7.3, 7.5 - Responsive and readable on all screens */}
         {!isOnline && (
-          <div className="mb-6 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 text-gray-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="mb-4 sm:mb-6 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg p-3 sm:p-4">
+            <div className="flex items-start sm:items-center">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
               </svg>
               <div>
-                <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">
+                <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm font-medium">
                   You are offline
                 </p>
-                <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
+                <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5 hidden sm:block">
                   Data may be outdated. Connection will resume automatically when online.
                 </p>
               </div>
@@ -318,20 +375,21 @@ function DashboardContent() {
         )}
 
         {/* API Errors/Warnings - Requirements 8.1, 8.2, 8.4 */}
+        {/* Requirements: 7.3, 7.5 - Responsive and readable on all screens */}
         {data?.errors && data.errors.length > 0 && (
-          <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="mb-4 sm:mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4">
             <div className="flex items-start">
-              <svg className="h-5 w-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 mt-0.5 mr-2 sm:mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
               </svg>
-              <div className="flex-1">
-                <p className="text-yellow-800 dark:text-yellow-400 text-sm font-medium">
+              <div className="flex-1 min-w-0">
+                <p className="text-yellow-800 dark:text-yellow-400 text-xs sm:text-sm font-medium">
                   {data.errors.length} warning{data.errors.length !== 1 ? 's' : ''}:
                 </p>
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-1.5 sm:mt-2 space-y-1">
                   {data.errors.map((err, idx) => (
-                    <li key={idx} className="text-yellow-700 dark:text-yellow-300 text-sm">
-                      <span className="font-medium">[{err.source === 'yahoo' ? 'Yahoo Finance' : err.source === 'google' ? 'Google Finance' : 'System'}]</span> {err.message}
+                    <li key={idx} className="text-yellow-700 dark:text-yellow-300 text-xs sm:text-sm break-words">
+                      <span className="font-medium">[{err.source === 'yahoo' ? 'Yahoo' : err.source === 'google' ? 'Google' : 'System'}]</span> {err.message}
                       {err.symbol && <span className="text-yellow-600 dark:text-yellow-400"> ({err.symbol})</span>}
                     </li>
                   ))}
@@ -340,7 +398,7 @@ function DashboardContent() {
               <button
                 onClick={() => refresh()}
                 disabled={isRefetching}
-                className="ml-4 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 text-sm font-medium"
+                className="ml-2 sm:ml-4 text-yellow-600 dark:text-yellow-400 active:text-yellow-700 dark:active:text-yellow-300 text-xs sm:text-sm font-medium whitespace-nowrap touch-manipulation"
               >
                 Retry
               </button>
@@ -378,9 +436,9 @@ function DashboardContent() {
               );
             })}
             
-            {/* Portfolio Summary Footer */}
-            <div className="mt-6 bg-white dark:bg-zinc-800 rounded-lg shadow-md p-4">
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {/* Portfolio Summary Footer - Responsive */}
+            <div className="mt-4 sm:mt-6 bg-white dark:bg-zinc-800 rounded-lg shadow-md p-3 sm:p-4">
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
                 Showing <span className="font-medium text-zinc-900 dark:text-zinc-100">{data?.holdings.length ?? 0}</span> holding{(data?.holdings.length ?? 0) !== 1 ? 's' : ''} across <span className="font-medium text-zinc-900 dark:text-zinc-100">{sortedSectors.length}</span> sector{sortedSectors.length !== 1 ? 's' : ''}
               </p>
             </div>

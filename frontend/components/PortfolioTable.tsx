@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import { useState, memo } from 'react';
 import type { Holding } from '@/types';
-import { getGainLossColorClass } from '@/utils';
+import { getGainLossColorClass, getGainLossBgClass, getGainLossBorderClass } from '@/utils';
+import { AnimatedCurrency, AnimatedPercentage } from './AnimatedValue';
 
 /**
  * Props for the PortfolioTable component
@@ -14,7 +15,7 @@ export interface PortfolioTableProps {
 }
 
 /**
- * Loading skeleton row for the table
+ * Loading skeleton row for the table (desktop view)
  */
 function SkeletonRow() {
   return (
@@ -35,7 +36,27 @@ function SkeletonRow() {
 }
 
 /**
- * Loading skeleton for the entire table
+ * Loading skeleton card for mobile view
+ */
+function SkeletonCard() {
+  return (
+    <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-sm p-4 animate-pulse">
+      <div className="flex justify-between items-start mb-3">
+        <div className="h-5 bg-zinc-200 dark:bg-zinc-700 rounded w-32"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16"></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton for the entire table (desktop view)
  */
 function TableSkeleton() {
   return (
@@ -44,6 +65,19 @@ function TableSkeleton() {
         <SkeletonRow key={index} />
       ))}
     </tbody>
+  );
+}
+
+/**
+ * Loading skeleton for mobile card view
+ */
+function CardsSkeleton() {
+  return (
+    <div className="space-y-3 p-4">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <SkeletonCard key={index} />
+      ))}
+    </div>
   );
 }
 
@@ -117,13 +151,15 @@ function TableHeader() {
 }
 
 /**
- * Single holding row component
+ * Single holding row component (desktop/tablet table view)
+ * Uses AnimatedValue components for live data fields (CMP, Present Value, Gain/Loss)
+ * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
  */
-function HoldingRow({ holding }: { holding: Holding }) {
+const HoldingRow = memo(function HoldingRow({ holding }: { holding: Holding }) {
   const gainLossColorClass = getGainLossColorClass(holding.gainLoss);
   
   return (
-    <tr className="text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+    <tr className="text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors active:bg-zinc-100 dark:active:bg-zinc-700/50">
       {/* Particulars */}
       <td className="px-3 py-3 text-zinc-900 dark:text-zinc-100 font-medium whitespace-nowrap">
         {holding.particulars}
@@ -161,21 +197,21 @@ function HoldingRow({ holding }: { holding: Holding }) {
         )}
       </td>
       
-      {/* CMP */}
+      {/* CMP - Animated for live updates */}
       <td className="px-3 py-3 text-right text-zinc-900 dark:text-zinc-100 font-medium whitespace-nowrap">
-        {formatCurrency(holding.cmp)}
+        <AnimatedCurrency value={holding.cmp} showDirectionIndicator={true} />
       </td>
       
-      {/* Present Value */}
+      {/* Present Value - Animated, recalculates when CMP updates */}
       <td className="px-3 py-3 text-right text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
-        {formatCurrency(holding.presentValue)}
+        <AnimatedCurrency value={holding.presentValue} />
       </td>
       
-      {/* Gain/Loss */}
+      {/* Gain/Loss - Animated, recalculates when Present Value updates */}
       <td className={`px-3 py-3 text-right font-semibold whitespace-nowrap ${gainLossColorClass}`}>
-        {formatCurrency(holding.gainLoss)}
+        <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
         <span className="text-xs ml-1">
-          ({formatPercentage(holding.gainLossPercentage)})
+          (<AnimatedPercentage value={holding.gainLossPercentage} showSign={false} className={gainLossColorClass} />)
         </span>
       </td>
       
@@ -189,6 +225,135 @@ function HoldingRow({ holding }: { holding: Holding }) {
         {holding.latestEarnings ?? '—'}
       </td>
     </tr>
+  );
+});
+
+/**
+ * Mobile card view for a single holding
+ * Requirements: 7.3, 7.5 - Mobile-friendly layout with touch-friendly interactions
+ * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
+ */
+const HoldingCard = memo(function HoldingCard({ holding, isExpanded, onToggle }: { holding: Holding; isExpanded: boolean; onToggle: () => void }) {
+  const gainLossColorClass = getGainLossColorClass(holding.gainLoss);
+  const bgClass = getGainLossBgClass(holding.gainLoss);
+  const borderClass = getGainLossBorderClass(holding.gainLoss);
+  
+  return (
+    <div 
+      className={`bg-white dark:bg-zinc-800 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden transition-all duration-200 ${isExpanded ? 'ring-2 ring-blue-500' : ''}`}
+    >
+      {/* Card Header - Always visible, touch-friendly */}
+      <button
+        onClick={onToggle}
+        className="w-full p-4 text-left active:bg-zinc-50 dark:active:bg-zinc-700/50 transition-colors touch-manipulation"
+        aria-expanded={isExpanded}
+        aria-label={`${holding.particulars} details`}
+      >
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+              {holding.particulars}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded">
+                {holding.nseCode}
+              </span>
+              {holding.bseCode && (
+                <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded">
+                  {holding.bseCode}
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Gain/Loss - Animated for live updates */}
+          <div className="flex flex-col items-end">
+            <span className={`font-bold ${gainLossColorClass}`}>
+              <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
+            </span>
+            <span className={`text-xs ${gainLossColorClass}`}>
+              <AnimatedPercentage value={holding.gainLossPercentage} showSign={false} className={gainLossColorClass} />
+            </span>
+          </div>
+        </div>
+        
+        {/* Quick stats row - CMP and Present Value animated */}
+        <div className="flex justify-between items-center mt-3 text-sm">
+          <div className="text-zinc-600 dark:text-zinc-400">
+            <span className="text-zinc-500 dark:text-zinc-500">CMP:</span>{' '}
+            <AnimatedCurrency value={holding.cmp} className="font-medium text-zinc-900 dark:text-zinc-100" showDirectionIndicator={true} />
+          </div>
+          <div className="text-zinc-600 dark:text-zinc-400">
+            <span className="text-zinc-500 dark:text-zinc-500">Value:</span>{' '}
+            <AnimatedCurrency value={holding.presentValue} className="font-medium text-zinc-900 dark:text-zinc-100" />
+          </div>
+          <svg 
+            className={`w-5 h-5 text-zinc-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      
+      {/* Expanded Details */}
+      {isExpanded && (
+        <div className={`px-4 pb-4 pt-2 border-t ${borderClass} ${bgClass}`}>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">Purchase Price</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(holding.purchasePrice)}</p>
+            </div>
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">Quantity</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.quantity.toLocaleString('en-IN')}</p>
+            </div>
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">Investment</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(holding.investment)}</p>
+            </div>
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">Portfolio %</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{formatPercentage(holding.portfolioPercentage)}</p>
+            </div>
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">P/E Ratio</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.peRatio !== null ? holding.peRatio.toFixed(2) : '—'}</p>
+            </div>
+            <div>
+              <span className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">Latest Earnings</span>
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.latestEarnings ?? '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * Mobile card list view
+ * Requirements: 7.3 - Mobile-friendly layout
+ */
+function HoldingCardList({ holdings }: { holdings: Holding[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  const handleToggle = (id: string) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+  
+  return (
+    <div className="space-y-3 p-4">
+      {holdings.map((holding) => (
+        <HoldingCard
+          key={holding.id}
+          holding={holding}
+          isExpanded={expandedId === holding.id}
+          onToggle={() => handleToggle(holding.id)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -206,6 +371,8 @@ function HoldingRow({ holding }: { holding: Holding }) {
  * - 7.1: Display full table layout optimally on desktop
  * - 7.2: Adapt layout for medium screens (tablet)
  * - 7.3: Adapt layout for small screens (mobile)
+ * - 7.4: Adjust layout responsively when viewport changes
+ * - 7.5: Maintain readability and usability on small screens
  * 
  * @param holdings - Array of stock holdings to display
  * @param isLoading - Whether data is currently being loaded
@@ -215,10 +382,10 @@ export function PortfolioTable({ holdings, isLoading, error }: PortfolioTablePro
   // Handle error state
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-        <div className="flex items-center">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 sm:p-6">
+        <div className="flex items-start sm:items-center">
           <svg
-            className="h-5 w-5 text-red-400 mr-3"
+            className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5 sm:mt-0"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -249,21 +416,33 @@ export function PortfolioTable({ holdings, isLoading, error }: PortfolioTablePro
 
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-lg overflow-hidden">
-      {/* Responsive container with horizontal scroll on smaller screens */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-          <TableHeader />
-          
-          {isLoading ? (
-            <TableSkeleton />
-          ) : (
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
-              {holdings.map((holding) => (
-                <HoldingRow key={holding.id} holding={holding} />
-              ))}
-            </tbody>
-          )}
-        </table>
+      {/* Mobile Card View - visible on small screens (< 768px) */}
+      <div className="block md:hidden">
+        {isLoading ? (
+          <CardsSkeleton />
+        ) : (
+          <HoldingCardList holdings={holdings} />
+        )}
+      </div>
+      
+      {/* Desktop/Tablet Table View - visible on medium screens and up (>= 768px) */}
+      <div className="hidden md:block">
+        {/* Responsive container with horizontal scroll on tablet screens */}
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
+          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+            <TableHeader />
+            
+            {isLoading ? (
+              <TableSkeleton />
+            ) : (
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
+                {holdings.map((holding) => (
+                  <HoldingRow key={holding.id} holding={holding} />
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
       </div>
       
       {/* Table footer with holdings count */}

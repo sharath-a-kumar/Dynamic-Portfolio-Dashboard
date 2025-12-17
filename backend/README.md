@@ -44,11 +44,21 @@ backend/
 
 ## Environment Variables
 
-- `PORT`: Server port (default: 3001)
-- `EXCEL_FILE_PATH`: Path to the portfolio Excel file
-- `CACHE_TTL_CMP`: Cache TTL for CMP data in seconds (default: 10)
-- `CACHE_TTL_FINANCIALS`: Cache TTL for financial metrics in seconds (default: 3600)
-- `NODE_ENV`: Environment (development/production)
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `PORT` | Server port number | `3001` | No |
+| `EXCEL_FILE_PATH` | Path to the portfolio Excel file (relative to backend directory) | `../E555815F_58D029050B.xlsx` | Yes |
+| `CACHE_TTL_CMP` | Cache TTL for CMP (Current Market Price) data in seconds | `10` | No |
+| `CACHE_TTL_FINANCIALS` | Cache TTL for financial metrics (P/E Ratio, Earnings) in seconds | `3600` | No |
+| `NODE_ENV` | Environment mode (`development` or `production`) | `development` | No |
+| `FRONTEND_URL` | Frontend URL for CORS configuration | `http://localhost:3000` | No |
+
+### Configuration Notes
+
+- **CACHE_TTL_CMP**: Set to 10 seconds by default to balance real-time updates with API rate limiting
+- **CACHE_TTL_FINANCIALS**: Set to 1 hour (3600 seconds) since P/E ratios and earnings change less frequently
+- **EXCEL_FILE_PATH**: Supports relative paths from the backend directory
+- **FRONTEND_URL**: Used for CORS configuration to allow frontend requests
 
 ## API Endpoints
 

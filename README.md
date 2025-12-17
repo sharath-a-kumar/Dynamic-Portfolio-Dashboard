@@ -93,6 +93,25 @@ The frontend will run on http://localhost:3000
 - XLSX (Excel parsing)
 - Node-cache (in-memory caching)
 
+## Environment Variables
+
+### Frontend (.env.local)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL | `http://localhost:3001` |
+
+### Backend (.env)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `3001` |
+| `EXCEL_FILE_PATH` | Path to portfolio Excel file | `../E555815F_58D029050B.xlsx` |
+| `CACHE_TTL_CMP` | Cache TTL for CMP data (seconds) | `10` |
+| `CACHE_TTL_FINANCIALS` | Cache TTL for financial metrics (seconds) | `3600` |
+| `NODE_ENV` | Environment mode | `development` |
+| `FRONTEND_URL` | Frontend URL for CORS | `http://localhost:3000` |
+
 ## Development
 
 See individual README files in `frontend/` and `backend/` directories for detailed development instructions.

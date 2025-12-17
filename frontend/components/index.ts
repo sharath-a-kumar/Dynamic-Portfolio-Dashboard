@@ -16,3 +16,6 @@ export type { ErrorBoundaryProps, ErrorBoundaryState } from './ErrorBoundary';
 
 export { ToastProvider, useToast } from './Toast';
 export type { Toast, ToastType, ToastProviderProps } from './Toast';
+
+export { AnimatedValue, AnimatedCurrency, AnimatedPercentage } from './AnimatedValue';
+export type { AnimatedValueProps } from './AnimatedValue';

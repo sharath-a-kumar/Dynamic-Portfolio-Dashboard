@@ -6,6 +6,7 @@ import xlsx from 'xlsx';
 import { createHolding } from '../models/Holding.js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { getNseFromBse } from '../utils/bseToNseMapping.js';
 
 class PortfolioService {
   /**
@@ -66,11 +67,12 @@ class PortfolioService {
         // Sector rows typically have only the name in __EMPTY_1 and summary data
         const particularsValue = row['__EMPTY_1'];
         const hasStockNumber = row['__EMPTY'] !== undefined && typeof row['__EMPTY'] === 'number';
-        const hasNseCode = row['__EMPTY_6'] !== undefined && typeof row['__EMPTY_6'] === 'string';
+        const stockCode = row['__EMPTY_6'];
+        const hasStockCode = stockCode !== undefined && stockCode !== null && stockCode !== '';
         
         if (particularsValue && typeof particularsValue === 'string') {
-          // Check if this looks like a sector header (no stock number, no NSE code)
-          if (!hasStockNumber && !hasNseCode && particularsValue.includes('Sector')) {
+          // Check if this looks like a sector header (no stock number, no stock code)
+          if (!hasStockNumber && !hasStockCode && particularsValue.includes('Sector')) {
             currentSector = particularsValue.replace(/\s*Sector\s*/i, '').trim();
             continue; // Skip to next row
           }
@@ -79,10 +81,9 @@ class PortfolioService {
           try {
             const purchasePrice = row['__EMPTY_2'];
             const quantity = row['__EMPTY_3'];
-            const nseCode = row['__EMPTY_6'];
             
             // Validate required fields
-            if (!particularsValue || purchasePrice === undefined || quantity === undefined || !nseCode) {
+            if (!particularsValue || purchasePrice === undefined || quantity === undefined || !hasStockCode) {
               errors.push({
                 row: i + 1,
                 error: 'Missing required fields (Particulars, Purchase Price, Qty, or NSE/BSE)'
@@ -90,8 +91,8 @@ class PortfolioService {
               continue;
             }
             
-            // Parse NSE/BSE codes
-            const [nse, bse] = this._parseNseBseCodes(nseCode);
+            // Parse NSE/BSE codes (can be string NSE code or numeric BSE code)
+            const [nse, bse] = this._parseNseBseCodes(stockCode);
             
             // Create holding
             const holding = createHolding({
@@ -138,18 +139,37 @@ class PortfolioService {
   }
   
   /**
-   * Parses NSE/BSE codes from a string
-   * @param {string} nseBseString - The NSE/BSE string
+   * Parses NSE/BSE codes from a string or number
+   * @param {string|number} stockCode - The NSE/BSE code (can be string NSE code or numeric BSE code)
    * @returns {Array} [nseCode, bseCode]
    * @private
    */
-  _parseNseBseCodes(nseBseString) {
-    if (!nseBseString || typeof nseBseString !== 'string') {
+  _parseNseBseCodes(stockCode) {
+    if (stockCode === undefined || stockCode === null || stockCode === '') {
       return ['', null];
     }
     
-    const codes = nseBseString.split('/').map(code => code.trim());
-    return [codes[0] || '', codes[1] || null];
+    // If it's a number, it's a BSE code
+    if (typeof stockCode === 'number') {
+      return ['', String(stockCode)];
+    }
+    
+    // If it's a string
+    const codeStr = String(stockCode).trim();
+    
+    // Check if it's a numeric string (BSE code)
+    if (/^\d+$/.test(codeStr)) {
+      return ['', codeStr];
+    }
+    
+    // It's an NSE code (or NSE/BSE format)
+    if (codeStr.includes('/')) {
+      const codes = codeStr.split('/').map(code => code.trim());
+      return [codes[0] || '', codes[1] || null];
+    }
+    
+    // Single NSE code
+    return [codeStr, null];
   }
 
   /**
@@ -268,41 +288,49 @@ class PortfolioService {
     
     // Extract symbols for batch fetching
     // Convert NSE codes to Yahoo Finance format (e.g., RELIANCE -> RELIANCE.NS)
+    // For BSE codes, try to map to NSE symbol first
     const symbolMap = new Map();
     holdings.forEach(holding => {
       if (holding.nseCode) {
+        // NSE code available - use .NS suffix
         const yahooSymbol = `${holding.nseCode}.NS`;
         symbolMap.set(holding.id, yahooSymbol);
+      } else if (holding.bseCode) {
+        // Try to get NSE symbol from BSE code mapping
+        const nseSymbol = getNseFromBse(holding.bseCode);
+        if (nseSymbol) {
+          const yahooSymbol = `${nseSymbol}.NS`;
+          symbolMap.set(holding.id, yahooSymbol);
+        } else {
+          // Fallback to BSE code with .BO suffix (may not work for all stocks)
+          const yahooSymbol = `${holding.bseCode}.BO`;
+          symbolMap.set(holding.id, yahooSymbol);
+        }
       }
     });
 
     const symbols = Array.from(symbolMap.values());
 
-    // Fetch CMP data and financial metrics in parallel
-    const [cmpResults, financialResults] = await Promise.allSettled([
-      yahooFinanceService.getBatchPrices(symbols),
-      googleFinanceService.getBatchFinancials(symbols)
-    ]);
-
-    // Extract successful results or empty maps
-    const cmpMap = cmpResults.status === 'fulfilled' 
-      ? cmpResults.value 
-      : new Map();
+    // Fetch CMP data from Yahoo Finance (skip Google Finance for faster loading)
+    // P/E ratio and earnings data is already in the Excel file
+    let cmpMap = new Map();
     
-    const financialMap = financialResults.status === 'fulfilled' 
-      ? financialResults.value 
-      : new Map();
-
-    // Track failures
-    if (cmpResults.status === 'rejected') {
+    try {
+      cmpMap = await yahooFinanceService.getBatchPrices(symbols);
+    } catch (error) {
       errors.push({
         source: 'yahoo',
-        message: `Failed to fetch CMP data: ${cmpResults.reason.message}`,
+        message: `Failed to fetch CMP data: ${error.message}`,
         timestamp: new Date()
       });
     }
 
-    if (financialResults.status === 'rejected') {
+    // Skip Google Finance for now - data is in Excel
+    const financialMap = new Map();
+    
+    // Note: Google Finance fetching is disabled for faster loading
+    // P/E ratio and earnings are read from Excel file instead
+    if (false && googleFinanceService) { // Disabled
       errors.push({
         source: 'google',
         message: `Failed to fetch financial metrics: ${financialResults.reason.message}`,
@@ -332,14 +360,8 @@ class PortfolioService {
         
         return enrichedHolding;
       } else {
-        // CMP not available - track error and return holding with existing data
-        errors.push({
-          source: 'yahoo',
-          message: `CMP data unavailable for ${holding.particulars}`,
-          symbol: yahooSymbol,
-          timestamp: new Date()
-        });
-
+        // CMP not available - silently skip
+        // Small-cap stocks may not be available on Yahoo Finance
         // Return holding with financial metrics but no CMP updates
         return {
           ...holding,

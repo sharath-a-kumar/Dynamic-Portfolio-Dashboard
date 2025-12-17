@@ -19,7 +19,8 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "node-cache": "^5.1.2",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "yahoo-finance2": "^3.10.2"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

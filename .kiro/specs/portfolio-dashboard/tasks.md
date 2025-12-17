@@ -283,7 +283,8 @@
   - Add visual indicator for auto-refresh status
   - _Requirements: 4.1, 4.4, 4.5_
 
-- [x] 18. Implement error handling UI
+- [ ] 18. Implement error handling UI
+
 
 
 
@@ -297,6 +298,11 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
 - [ ] 19. Implement responsive design
+
+
+
+
+
   - Optimize table layout for desktop screens
   - Create responsive layout for tablet screens
   - Create mobile-friendly layout with horizontal scroll or card view
@@ -309,7 +315,12 @@
   - Test mobile card view if implemented
   - _Requirements: 7.1, 7.2, 7.3_
 
+
 - [ ] 20. Implement UI updates for live data
+
+
+
+
   - Ensure CMP updates trigger table re-render
   - Ensure Present Value recalculates when CMP updates
   - Ensure Gain/Loss recalculates when Present Value updates
@@ -341,6 +352,11 @@
   - _Requirements: 10.5_
 
 - [ ] 23. Configure environment variables
+
+
+
+
+
   - Set up frontend environment variables (API URL)
   - Set up backend environment variables (PORT, Excel path, cache TTLs)
   - Create .env.example files for both projects
