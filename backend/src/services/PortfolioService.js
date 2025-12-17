@@ -245,6 +245,119 @@ class PortfolioService {
       holdingsCount: holdings.length
     };
   }
+
+  /**
+   * Enriches portfolio holdings with live data from Yahoo Finance and Google Finance
+   * Orchestrates parallel fetching of CMP and financial metrics
+   * Handles partial failures gracefully and returns available data
+   * 
+   * @param {Array} holdings - Array of holding objects to enrich
+   * @param {Object} yahooFinanceService - Yahoo Finance service instance
+   * @param {Object} googleFinanceService - Google Finance service instance
+   * @returns {Promise<Object>} Object containing enriched holdings and any errors
+   */
+  async enrichWithLiveData(holdings, yahooFinanceService, googleFinanceService) {
+    if (!holdings || holdings.length === 0) {
+      return {
+        holdings: [],
+        errors: []
+      };
+    }
+
+    const errors = [];
+    
+    // Extract symbols for batch fetching
+    // Convert NSE codes to Yahoo Finance format (e.g., RELIANCE -> RELIANCE.NS)
+    const symbolMap = new Map();
+    holdings.forEach(holding => {
+      if (holding.nseCode) {
+        const yahooSymbol = `${holding.nseCode}.NS`;
+        symbolMap.set(holding.id, yahooSymbol);
+      }
+    });
+
+    const symbols = Array.from(symbolMap.values());
+
+    // Fetch CMP data and financial metrics in parallel
+    const [cmpResults, financialResults] = await Promise.allSettled([
+      yahooFinanceService.getBatchPrices(symbols),
+      googleFinanceService.getBatchFinancials(symbols)
+    ]);
+
+    // Extract successful results or empty maps
+    const cmpMap = cmpResults.status === 'fulfilled' 
+      ? cmpResults.value 
+      : new Map();
+    
+    const financialMap = financialResults.status === 'fulfilled' 
+      ? financialResults.value 
+      : new Map();
+
+    // Track failures
+    if (cmpResults.status === 'rejected') {
+      errors.push({
+        source: 'yahoo',
+        message: `Failed to fetch CMP data: ${cmpResults.reason.message}`,
+        timestamp: new Date()
+      });
+    }
+
+    if (financialResults.status === 'rejected') {
+      errors.push({
+        source: 'google',
+        message: `Failed to fetch financial metrics: ${financialResults.reason.message}`,
+        timestamp: new Date()
+      });
+    }
+
+    // Enrich each holding with live data
+    const enrichedHoldings = holdings.map(holding => {
+      const yahooSymbol = symbolMap.get(holding.id);
+      
+      // Get CMP from Yahoo Finance
+      const cmp = cmpMap.get(yahooSymbol);
+      
+      // Get financial metrics from Google Finance
+      const financialData = financialMap.get(yahooSymbol);
+      const peRatio = financialData?.peRatio ?? null;
+      const latestEarnings = financialData?.latestEarnings ?? null;
+
+      // If CMP is available, calculate all metrics
+      if (cmp !== undefined && cmp !== null) {
+        const enrichedHolding = this.calculateMetrics(holding, cmp);
+        
+        // Add financial metrics
+        enrichedHolding.peRatio = peRatio;
+        enrichedHolding.latestEarnings = latestEarnings;
+        
+        return enrichedHolding;
+      } else {
+        // CMP not available - track error and return holding with existing data
+        errors.push({
+          source: 'yahoo',
+          message: `CMP data unavailable for ${holding.particulars}`,
+          symbol: yahooSymbol,
+          timestamp: new Date()
+        });
+
+        // Return holding with financial metrics but no CMP updates
+        return {
+          ...holding,
+          peRatio,
+          latestEarnings,
+          lastUpdated: new Date()
+        };
+      }
+    });
+
+    // Calculate portfolio percentages for all enriched holdings
+    const holdingsWithPercentages = this.calculatePortfolioPercentages(enrichedHoldings);
+
+    return {
+      holdings: holdingsWithPercentages,
+      errors
+    };
+  }
 }
 
 export default PortfolioService;

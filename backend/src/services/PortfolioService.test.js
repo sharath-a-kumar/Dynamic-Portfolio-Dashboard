@@ -260,4 +260,349 @@ describe('PortfolioService', () => {
       expect(result.holdingsCount).toBe(2);
     });
   });
+
+  describe('enrichWithLiveData', () => {
+    let mockYahooService;
+    let mockGoogleService;
+
+    beforeEach(() => {
+      // Create mock services with simple mock functions
+      mockYahooService = {
+        getBatchPrices: async () => new Map()
+      };
+
+      mockGoogleService = {
+        getBatchFinancials: async () => new Map()
+      };
+    });
+
+    test('should enrich holdings with CMP and financial data', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Reliance Industries',
+          purchasePrice: 2000,
+          quantity: 10,
+          nseCode: 'RELIANCE',
+          sector: 'Energy'
+        },
+        {
+          id: '2',
+          particulars: 'TCS',
+          purchasePrice: 3000,
+          quantity: 5,
+          nseCode: 'TCS',
+          sector: 'Technology'
+        }
+      ];
+
+      // Mock Yahoo Finance responses
+      mockYahooService.getBatchPrices = async () => new Map([
+        ['RELIANCE.NS', 2500],
+        ['TCS.NS', 3500]
+      ]);
+
+      // Mock Google Finance responses
+      mockGoogleService.getBatchFinancials = async () => new Map([
+        ['RELIANCE.NS', { peRatio: 25.5, latestEarnings: 'Q4 2024' }],
+        ['TCS.NS', { peRatio: 30.2, latestEarnings: 'Q3 2024' }]
+      ]);
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(2);
+      expect(result.errors).toHaveLength(0);
+
+      // Check first holding
+      const reliance = result.holdings[0];
+      expect(reliance.cmp).toBe(2500);
+      expect(reliance.investment).toBe(20000); // 2000 × 10
+      expect(reliance.presentValue).toBe(25000); // 2500 × 10
+      expect(reliance.gainLoss).toBe(5000); // 25000 - 20000
+      expect(reliance.peRatio).toBe(25.5);
+      expect(reliance.latestEarnings).toBe('Q4 2024');
+
+      // Check second holding
+      const tcs = result.holdings[1];
+      expect(tcs.cmp).toBe(3500);
+      expect(tcs.investment).toBe(15000); // 3000 × 5
+      expect(tcs.presentValue).toBe(17500); // 3500 × 5
+      expect(tcs.gainLoss).toBe(2500); // 17500 - 15000
+      expect(tcs.peRatio).toBe(30.2);
+      expect(tcs.latestEarnings).toBe('Q3 2024');
+    });
+
+    test('should calculate portfolio percentages correctly', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        },
+        {
+          id: '2',
+          particulars: 'Stock B',
+          purchasePrice: 200,
+          quantity: 10,
+          nseCode: 'STOCKB',
+          sector: 'Finance'
+        }
+      ];
+
+      mockYahooService.getBatchPrices = async () => new Map([
+        ['STOCKA.NS', 150],
+        ['STOCKB.NS', 250]
+      ]);
+
+      mockGoogleService.getBatchFinancials = async () => new Map();
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      // Total investment: 1000 + 2000 = 3000
+      // Stock A: 1000/3000 = 33.33%
+      // Stock B: 2000/3000 = 66.67%
+      expect(result.holdings[0].portfolioPercentage).toBeCloseTo(33.33, 1);
+      expect(result.holdings[1].portfolioPercentage).toBeCloseTo(66.67, 1);
+    });
+
+    test('should handle partial failures gracefully', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        },
+        {
+          id: '2',
+          particulars: 'Stock B',
+          purchasePrice: 200,
+          quantity: 10,
+          nseCode: 'STOCKB',
+          sector: 'Finance'
+        }
+      ];
+
+      // Only one stock has CMP data
+      mockYahooService.getBatchPrices = async () => new Map([
+        ['STOCKA.NS', 150]
+        // STOCKB.NS is missing
+      ]);
+
+      mockGoogleService.getBatchFinancials = async () => new Map();
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(2);
+      expect(result.errors.length).toBeGreaterThan(0);
+
+      // First holding should have CMP data
+      expect(result.holdings[0].cmp).toBe(150);
+      expect(result.holdings[0].presentValue).toBe(1500);
+
+      // Second holding should not have updated CMP
+      expect(result.holdings[1].cmp).toBeUndefined();
+    });
+
+    test('should handle Yahoo Finance service failure', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        }
+      ];
+
+      // Yahoo Finance fails
+      mockYahooService.getBatchPrices = async () => {
+        throw new Error('Yahoo Finance API error');
+      };
+
+      mockGoogleService.getBatchFinancials = async () => new Map([
+        ['STOCKA.NS', { peRatio: 25.0, latestEarnings: 'Q4 2024' }]
+      ]);
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(1);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors.some(e => e.source === 'yahoo')).toBe(true);
+
+      // Should still have financial data from Google
+      expect(result.holdings[0].peRatio).toBe(25.0);
+      expect(result.holdings[0].latestEarnings).toBe('Q4 2024');
+    });
+
+    test('should handle Google Finance service failure', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        }
+      ];
+
+      mockYahooService.getBatchPrices = async () => new Map([
+        ['STOCKA.NS', 150]
+      ]);
+
+      // Google Finance fails
+      mockGoogleService.getBatchFinancials = async () => {
+        throw new Error('Google Finance API error');
+      };
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(1);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors.some(e => e.source === 'google')).toBe(true);
+
+      // Should still have CMP data from Yahoo
+      expect(result.holdings[0].cmp).toBe(150);
+      expect(result.holdings[0].presentValue).toBe(1500);
+    });
+
+    test('should handle both services failing', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        }
+      ];
+
+      mockYahooService.getBatchPrices = async () => {
+        throw new Error('Yahoo Finance API error');
+      };
+
+      mockGoogleService.getBatchFinancials = async () => {
+        throw new Error('Google Finance API error');
+      };
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(1);
+      expect(result.errors.length).toBeGreaterThanOrEqual(2);
+      expect(result.errors.some(e => e.source === 'yahoo')).toBe(true);
+      expect(result.errors.some(e => e.source === 'google')).toBe(true);
+    });
+
+    test('should handle empty holdings array', async () => {
+      const result = await service.enrichWithLiveData(
+        [],
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('should fetch data in parallel', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        }
+      ];
+
+      let yahooCallTime;
+      let googleCallTime;
+
+      mockYahooService.getBatchPrices = async () => {
+        yahooCallTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return new Map([['STOCKA.NS', 150]]);
+      };
+
+      mockGoogleService.getBatchFinancials = async () => {
+        googleCallTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return new Map([['STOCKA.NS', { peRatio: 25.0, latestEarnings: 'Q4 2024' }]]);
+      };
+
+      await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      // Both services should be called at approximately the same time (parallel)
+      expect(Math.abs(yahooCallTime - googleCallTime)).toBeLessThan(10);
+    });
+
+    test('should handle missing financial data gracefully', async () => {
+      const holdings = [
+        {
+          id: '1',
+          particulars: 'Stock A',
+          purchasePrice: 100,
+          quantity: 10,
+          nseCode: 'STOCKA',
+          sector: 'Technology'
+        }
+      ];
+
+      mockYahooService.getBatchPrices = async () => new Map([
+        ['STOCKA.NS', 150]
+      ]);
+
+      // Google Finance returns data with null values
+      mockGoogleService.getBatchFinancials = async () => new Map([
+        ['STOCKA.NS', { peRatio: null, latestEarnings: null }]
+      ]);
+
+      const result = await service.enrichWithLiveData(
+        holdings,
+        mockYahooService,
+        mockGoogleService
+      );
+
+      expect(result.holdings[0].peRatio).toBeNull();
+      expect(result.holdings[0].latestEarnings).toBeNull();
+      expect(result.holdings[0].cmp).toBe(150);
+    });
+  });
 });
