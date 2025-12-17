@@ -153,6 +153,39 @@ class PortfolioService {
   }
 
   /**
+   * Calculates all metrics for a holding based on current market price
+   * @param {Object} holding - The holding object
+   * @param {number} cmp - Current market price
+   * @returns {Object} Updated holding with calculated metrics
+   */
+  calculateMetrics(holding, cmp) {
+    // Calculate Investment (Purchase Price × Quantity)
+    const investment = holding.purchasePrice * holding.quantity;
+    
+    // Calculate Present Value (CMP × Quantity)
+    const presentValue = cmp * holding.quantity;
+    
+    // Calculate Gain/Loss (Present Value - Investment)
+    const gainLoss = presentValue - investment;
+    
+    // Calculate Gain/Loss percentage
+    const gainLossPercentage = investment !== 0 
+      ? (gainLoss / investment) * 100 
+      : 0;
+    
+    // Return updated holding with all calculated fields
+    return {
+      ...holding,
+      cmp,
+      investment,
+      presentValue,
+      gainLoss,
+      gainLossPercentage,
+      lastUpdated: new Date()
+    };
+  }
+
+  /**
    * Calculates portfolio percentages for all holdings
    * @param {Array} holdings - Array of holding objects
    * @returns {Array} Holdings with updated portfolio percentages

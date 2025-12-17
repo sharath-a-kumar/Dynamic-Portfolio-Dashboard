@@ -72,6 +72,121 @@ describe('PortfolioService', () => {
     });
   });
 
+  describe('calculateMetrics', () => {
+    test('should calculate Investment correctly (Purchase Price × Quantity)', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.investment).toBe(1000); // 100 × 10
+    });
+
+    test('should calculate Present Value correctly (CMP × Quantity)', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.presentValue).toBe(1200); // 120 × 10
+    });
+
+    test('should calculate Gain/Loss correctly (Present Value - Investment)', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.gainLoss).toBe(200); // 1200 - 1000
+    });
+
+    test('should calculate Gain/Loss percentage correctly', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.gainLossPercentage).toBe(20); // (200 / 1000) × 100
+    });
+
+    test('should handle negative Gain/Loss', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 80);
+
+      expect(result.investment).toBe(1000);
+      expect(result.presentValue).toBe(800);
+      expect(result.gainLoss).toBe(-200);
+      expect(result.gainLossPercentage).toBe(-20);
+    });
+
+    test('should handle zero investment', () => {
+      const holding = {
+        purchasePrice: 0,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 100);
+
+      expect(result.investment).toBe(0);
+      expect(result.presentValue).toBe(1000);
+      expect(result.gainLoss).toBe(1000);
+      expect(result.gainLossPercentage).toBe(0); // Avoid division by zero
+    });
+
+    test('should update CMP in the holding', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10,
+        cmp: 0
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.cmp).toBe(120);
+    });
+
+    test('should update lastUpdated timestamp', () => {
+      const holding = {
+        purchasePrice: 100,
+        quantity: 10
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.lastUpdated).toBeInstanceOf(Date);
+    });
+
+    test('should preserve other holding properties', () => {
+      const holding = {
+        id: 'test-123',
+        particulars: 'Test Stock',
+        purchasePrice: 100,
+        quantity: 10,
+        nseCode: 'TEST',
+        sector: 'Technology'
+      };
+
+      const result = service.calculateMetrics(holding, 120);
+
+      expect(result.id).toBe('test-123');
+      expect(result.particulars).toBe('Test Stock');
+      expect(result.nseCode).toBe('TEST');
+      expect(result.sector).toBe('Technology');
+    });
+  });
+
   describe('calculatePortfolioPercentages', () => {
     test('should calculate correct portfolio percentages', () => {
       const holdings = [

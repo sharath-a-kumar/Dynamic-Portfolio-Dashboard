@@ -84,7 +84,12 @@
   - Test cache integration
   - _Requirements: 2.1, 2.2_
 
-- [ ] 6. Implement Google Finance service
+- [x] 6. Implement Google Finance service
+
+
+
+
+
   - Create GoogleFinanceService class
   - Implement getPERatio method using web scraping
   - Implement getLatestEarnings method
@@ -100,7 +105,12 @@
   - Test cache integration
   - _Requirements: 3.1, 3.2_
 
-- [ ] 7. Implement portfolio calculation logic
+- [x] 7. Implement portfolio calculation logic
+
+
+
+
+
   - Create calculateMetrics method in PortfolioService
   - Implement Investment calculation (Purchase Price × Quantity)
   - Implement Present Value calculation (CMP × Quantity)
@@ -117,7 +127,12 @@
   - **Property 4: Portfolio percentages sum to 100%**
   - **Validates: Requirements 1.4**
 
-- [ ] 8. Implement sector grouping and aggregation
+- [x] 8. Implement sector grouping and aggregation
+
+
+
+
+
   - Create groupBySector method in PortfolioService
   - Create calculateSectorSummary method
   - Implement Total Investment aggregation per sector
