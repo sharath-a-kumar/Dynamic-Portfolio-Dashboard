@@ -30,7 +30,12 @@
   - Create validation functions for data models (backend)
   - _Requirements: 1.2, 11.2_
 
-- [ ] 3. Implement Excel parsing service
+- [x] 3. Implement Excel parsing service
+
+
+
+
+
   - Create PortfolioService with loadPortfolioFromExcel method
   - Implement Excel file reading using xlsx library
   - Parse Excel rows into Holding objects
