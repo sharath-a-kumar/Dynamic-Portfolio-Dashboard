@@ -1,5 +1,151 @@
 # Portfolio Services
 
+## YahooFinanceService
+
+The `YahooFinanceService` class fetches real-time stock prices from Yahoo Finance with caching, retry logic, and rate limiting.
+
+### Features
+
+- **Real-time Price Fetching**: Retrieves current market prices (CMP) for stocks
+- **Batch Processing**: Fetches multiple stock prices efficiently
+- **Caching**: 10-second TTL cache to reduce API calls
+- **Retry Logic**: Exponential backoff for transient errors
+- **Rate Limiting**: Prevents API blocks with request queuing
+- **Error Handling**: Graceful handling of network errors, timeouts, and invalid symbols
+
+### Usage
+
+```javascript
+import YahooFinanceService from './services/YahooFinanceService.js';
+import CacheService from './services/CacheService.js';
+
+const cacheService = new CacheService();
+const yahooService = new YahooFinanceService(cacheService, {
+  cacheTTL: 10,              // Cache for 10 seconds
+  maxRetries: 3,             // Retry up to 3 times
+  initialRetryDelay: 1000,   // Start with 1 second delay
+  timeout: 5000,             // 5 second timeout
+  minRequestInterval: 100    // 100ms between requests
+});
+
+// Fetch single stock price
+const price = await yahooService.getCurrentPrice('RELIANCE.NS');
+console.log(`Current price: ₹${price}`);
+
+// Fetch multiple stock prices
+const symbols = ['RELIANCE.NS', 'TCS.NS', 'INFY.NS'];
+const priceMap = await yahooService.getBatchPrices(symbols);
+priceMap.forEach((price, symbol) => {
+  console.log(`${symbol}: ₹${price}`);
+});
+
+// View statistics
+const stats = yahooService.getStats();
+console.log(`Cache hit rate: ${stats.cache.hitRate}`);
+
+// Clear cache
+yahooService.clearCache();
+```
+
+### Methods
+
+#### `getCurrentPrice(symbol)`
+
+Fetches the current market price for a single stock symbol.
+
+**Parameters:**
+- `symbol` (string): Stock symbol (e.g., 'RELIANCE.NS' for NSE, 'RELIANCE.BO' for BSE)
+
+**Returns:**
+- Promise<number>: Current market price
+
+**Throws:**
+- Error if symbol is invalid or price cannot be fetched
+
+**Caching:**
+- Results are cached for 10 seconds (configurable)
+- Subsequent calls within TTL return cached value
+
+#### `getBatchPrices(symbols)`
+
+Fetches prices for multiple stock symbols in parallel with rate limiting.
+
+**Parameters:**
+- `symbols` (string[]): Array of stock symbols
+
+**Returns:**
+- Promise<Map<string, number>>: Map of symbol to price
+
+**Features:**
+- Filters out invalid symbols automatically
+- Handles partial failures gracefully
+- Returns available prices even if some fail
+- Respects rate limiting between requests
+
+#### `clearCache()`
+
+Clears all cached Yahoo Finance prices.
+
+#### `getStats()`
+
+Returns service statistics including cache performance.
+
+**Returns:**
+- Object with:
+  - `cache`: Cache statistics (hits, misses, hit rate, keys)
+  - `queueLength`: Number of queued requests
+  - `isProcessingQueue`: Whether queue is being processed
+
+### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `cacheTTL` | 10 | Cache time-to-live in seconds |
+| `maxRetries` | 3 | Maximum retry attempts for failed requests |
+| `initialRetryDelay` | 1000 | Initial retry delay in milliseconds (exponential backoff) |
+| `timeout` | 5000 | Request timeout in milliseconds |
+| `minRequestInterval` | 100 | Minimum time between requests in milliseconds |
+
+### Error Handling
+
+The service creates structured error objects with:
+- `source`: 'yahoo'
+- `message`: Descriptive error message
+- `symbol`: Stock symbol (if applicable)
+- `timestamp`: Error timestamp
+
+**Error Types:**
+- **Invalid Symbol**: Symbol not found (404)
+- **Rate Limit**: Too many requests (429)
+- **Timeout**: Request exceeded timeout
+- **Network Error**: Connection issues
+- **Parse Error**: Unable to extract price from response
+
+### Requirements Validated
+
+This implementation satisfies the following requirements:
+
+- **2.1**: Fetches CMP data from Yahoo Finance for all holdings
+- **2.2**: Handles Yahoo Finance unavailability gracefully
+- **2.4**: Implements rate limiting to prevent API blocks
+- **2.5**: Batches requests efficiently for multiple stocks
+- **8.1**: Displays clear error messages when data unavailable
+- **8.4**: Handles API rate limits appropriately
+
+### Testing
+
+Run the test suite:
+
+```bash
+npm test YahooFinanceService.test.js
+```
+
+Run the example usage:
+
+```bash
+node src/services/YahooFinanceService.example.js
+```
+
 ## PortfolioService
 
 The `PortfolioService` class handles portfolio data loading, parsing, and calculations.
