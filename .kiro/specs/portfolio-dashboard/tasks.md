@@ -188,7 +188,8 @@
 - [ ] 11. Checkpoint - Ensure backend tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [x] 12. Create frontend data fetching hooks
+- [ ] 12. Create frontend data fetching hooks
+
 
 
 
@@ -203,6 +204,11 @@
   - **Validates: Requirements 2.1**
 
 - [ ] 13. Implement PortfolioTable component
+
+
+
+
+
   - Create table structure with all required columns
   - Implement responsive table layout with Tailwind CSS
   - Add loading skeleton for better UX
@@ -217,7 +223,12 @@
   - **Property 2: All required columns are present**
   - **Validates: Requirements 1.2**
 
+
 - [ ] 14. Implement Gain/Loss color coding
+
+
+
+
   - Create utility function for determining color based on value
   - Apply green color for positive Gain/Loss
   - Apply red color for negative Gain/Loss
@@ -229,7 +240,11 @@
   - **Property 7: Gain/Loss color coding is correct**
   - **Validates: Requirements 5.1, 5.2, 5.3**
 
-- [ ] 15. Implement SectorGroup component
+
+
+- [x] 15. Implement SectorGroup component
+
+
   - Create sector header with sector name
   - Display holdings within each sector
   - Create sector summary section
