@@ -126,14 +126,13 @@ class YahooFinanceService {
       return priceMap;
     }
 
-    // Fetch all uncached symbols - try batch first, then individual
+    // Fetch all uncached symbols - try batch first, then parallel individual
     try {
-      // Try batch API first
+      // Try batch API first (single request for all symbols)
       const batchPrices = await this._fetchBatchPricesFromYahoo(uncachedSymbols);
       
       for (const [symbol, price] of batchPrices) {
         priceMap.set(symbol, price);
-        // Cache the result
         const cacheKey = `yahoo:price:${symbol}`;
         this.cacheService.set(cacheKey, price, this.cacheTTL);
       }
@@ -141,21 +140,14 @@ class YahooFinanceService {
       // Check if any symbols were missed in batch
       const missedSymbols = uncachedSymbols.filter(s => !batchPrices.has(s));
       
-      // Fetch missed symbols individually with delay
-      for (const symbol of missedSymbols) {
-        try {
-          await this._sleep(500); // 500ms delay between requests
-          const price = await this._fetchPriceFromYahoo(symbol);
+      // Fetch missed symbols in parallel (max 5 at a time)
+      if (missedSymbols.length > 0) {
+        const results = await this._fetchParallel(missedSymbols, 5);
+        for (const { symbol, price } of results) {
           if (price !== null) {
             priceMap.set(symbol, price);
             const cacheKey = `yahoo:price:${symbol}`;
             this.cacheService.set(cacheKey, price, this.cacheTTL);
-          }
-        } catch (err) {
-          console.warn(`Failed to fetch ${symbol}:`, err.message);
-          if (err.message?.includes('429') || err.message?.includes('Too Many Requests') || err.message?.includes('Rate limited')) {
-            this.lastRateLimitTime = Date.now();
-            break;
           }
         }
       }
@@ -164,28 +156,18 @@ class YahooFinanceService {
       if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
         console.warn('Rate limited by Yahoo Finance, backing off...');
         this.lastRateLimitTime = Date.now();
-        return priceMap; // Return whatever we have cached
+        return priceMap;
       }
       
-      // If batch fails for other reasons, try individual requests with delay
-      console.warn('Batch quote failed, falling back to individual requests:', error.message);
+      // If batch fails, try parallel individual requests
+      console.warn('Batch quote failed, falling back to parallel requests:', error.message);
       
-      // Add delay between individual requests to avoid rate limiting
-      for (const symbol of uncachedSymbols) {
-        try {
-          await this._sleep(1000); // 1 second delay between requests
-          const price = await this._fetchPriceFromYahoo(symbol);
-          if (price !== null) {
-            priceMap.set(symbol, price);
-            const cacheKey = `yahoo:price:${symbol}`;
-            this.cacheService.set(cacheKey, price, this.cacheTTL);
-          }
-        } catch (err) {
-          console.warn(`Failed to fetch ${symbol}:`, err.message);
-          if (err.message?.includes('429') || err.message?.includes('Too Many Requests') || err.message?.includes('Rate limited')) {
-            this.lastRateLimitTime = Date.now();
-            break; // Stop making requests if rate limited
-          }
+      const results = await this._fetchParallel(uncachedSymbols, 5);
+      for (const { symbol, price } of results) {
+        if (price !== null) {
+          priceMap.set(symbol, price);
+          const cacheKey = `yahoo:price:${symbol}`;
+          this.cacheService.set(cacheKey, price, this.cacheTTL);
         }
       }
     }
@@ -312,6 +294,45 @@ class YahooFinanceService {
     }
     
     return priceMap;
+  }
+
+  /**
+   * Fetch multiple symbols in parallel with concurrency limit
+   * @private
+   * @param {string[]} symbols - Array of stock symbols
+   * @param {number} concurrency - Max concurrent requests
+   * @returns {Promise<Array<{symbol: string, price: number|null}>>}
+   */
+  async _fetchParallel(symbols, concurrency = 5) {
+    const results = [];
+    
+    // Process in batches of 'concurrency' size
+    for (let i = 0; i < symbols.length; i += concurrency) {
+      const batch = symbols.slice(i, i + concurrency);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (symbol) => {
+          try {
+            const price = await this._fetchPriceFromYahoo(symbol);
+            return { symbol, price };
+          } catch (err) {
+            if (err.message?.includes('429') || err.message?.includes('Rate limited')) {
+              this.lastRateLimitTime = Date.now();
+            }
+            return { symbol, price: null };
+          }
+        })
+      );
+      
+      results.push(...batchResults);
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + concurrency < symbols.length) {
+        await this._sleep(200);
+      }
+    }
+    
+    return results;
   }
 
   /**
