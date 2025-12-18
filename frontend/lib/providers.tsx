@@ -8,13 +8,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ToastProvider } from '@/components/Toast';
+import { ThemeProvider } from './ThemeProvider';
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
 /**
- * Providers component that wraps the application with React Query and Toast notifications
+ * Providers component that wraps the application with React Query, Theme, and Toast notifications
  * Creates a new QueryClient instance for each user session
  */
 export function Providers({ children }: ProvidersProps) {
@@ -37,10 +38,12 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider maxToasts={5} defaultDuration={5000}>
-        {children}
-      </ToastProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider maxToasts={5} defaultDuration={5000}>
+          {children}
+        </ToastProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

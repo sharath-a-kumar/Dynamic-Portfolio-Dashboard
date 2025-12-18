@@ -16,7 +16,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Portfolio Dashboard",
   description: "Real-time stock portfolio tracking dashboard",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
+
+// Script to prevent flash of wrong theme
+const themeScript = `
+  (function() {
+    const theme = localStorage.getItem('theme');
+    if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+  })();
+`;
 
 export default function RootLayout({
   children,
@@ -24,7 +37,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

@@ -1,218 +1,263 @@
 'use client';
 
 import { useState, memo } from 'react';
-
+import { CompanyLogo } from './CompanyLogo';
 import type { Holding, SectorSummary } from '@/types';
-import { getGainLossColorClass, getGainLossBgClass, getGainLossBorderClass } from '@/utils';
 import { AnimatedCurrency, AnimatedPercentage } from './AnimatedValue';
+import { ChevronDown, ChevronUp, Eye, ShoppingCart, DollarSign } from 'lucide-react';
 
-/**
- * Props for the SectorGroup component
- */
 export interface SectorGroupProps {
   sector: string;
   holdings: Holding[];
   summary: SectorSummary;
 }
 
-/**
- * Format currency value in Indian Rupees
- */
 function formatCurrency(value: number): string {
   return `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
-/**
- * Sector header component displaying the sector name
- * Requirements: 6.2 - Show a sector header for each group
- * Requirements: 7.3, 7.5 - Responsive and touch-friendly
- */
+// Sparkline Component - Enhanced visibility
+const TrendSparkline = ({ isPositive }: { isPositive: boolean }) => {
+  const color = isPositive ? '#10b981' : '#ef4444';
+  const fillColor = isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+
+  // More pronounced path
+  const path = isPositive
+    ? "M0 25 L10 22 L20 28 L30 15 L40 20 L50 8 L60 12 L70 5 L80 0"
+    : "M0 5 L10 12 L20 8 L30 20 L40 15 L50 28 L60 22 L70 25 L80 30";
+
+  return (
+    <div className="flex justify-center items-center h-full w-24">
+      <svg width="80" height="30" viewBox="0 0 80 30" fill="none">
+        <path d={path} stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={`${path} L80 30 L0 30 Z`} fill={fillColor} stroke="none" />
+      </svg>
+    </div>
+  );
+};
+
+// Portfolio Percentage Bar - More prominent
+const PortfolioBar = ({ percentage }: { percentage: number }) => (
+  <div className="flex flex-col gap-1 w-28">
+    <div className="flex justify-between text-[10px] font-medium text-muted-foreground">
+      <span>{percentage.toFixed(2)}%</span>
+    </div>
+    <div className="h-2 w-full bg-secondary rounded-full overflow-hidden border border-border">
+      <div
+        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+        style={{ width: `${Math.min(percentage * 5, 100)}%` }}
+      />
+    </div>
+  </div>
+);
+
 function SectorHeader({ sector, holdingsCount }: { sector: string; holdingsCount: number }) {
   return (
-    <div className="flex items-center justify-between px-3 sm:px-4 py-3 bg-zinc-100 dark:bg-zinc-700/50 border-b border-zinc-200 dark:border-zinc-600">
-      <h3 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-        {sector}
-      </h3>
-      <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap ml-2">
-        {holdingsCount} holding{holdingsCount !== 1 ? 's' : ''}
-      </span>
+    <div className="flex items-center justify-between px-6 py-4 bg-card border-b border-border">
+      <div className="flex items-center gap-3">
+        <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+          {sector}
+        </h3>
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-border">
+          {holdingsCount}
+        </span>
+      </div>
     </div>
   );
 }
 
-/**
- * Table header for holdings within a sector
- */
 function HoldingsTableHeader() {
   return (
-    <thead className="bg-zinc-50 dark:bg-zinc-800/30">
-      <tr className="text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-        <th className="px-3 py-2 whitespace-nowrap">Particulars</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Purchase Price</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Quantity</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Investment</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Portfolio %</th>
-        <th className="px-3 py-2 whitespace-nowrap">NSE/BSE</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">CMP</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Present Value</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Gain/Loss</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">P/E Ratio</th>
-        <th className="px-3 py-2 text-right whitespace-nowrap">Latest Earnings</th>
+    <thead className="bg-accent table-sticky-header z-10">
+      <tr className="text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">
+        <th className="px-6 py-4 rounded-tl-lg">Particulars</th>
+        <th className="px-4 py-4 text-right">Market Price</th>
+        <th className="px-4 py-4 text-right">Value</th>
+        <th className="px-4 py-4 text-right">P&L</th>
+        <th className="px-4 py-4 text-center">Trend</th>
+        <th className="px-4 py-4">Portfolio %</th>
+        <th className="px-4 py-4 text-right">Fundamentals</th>
+        <th className="px-4 py-4 text-center rounded-tr-lg w-[140px]">Action</th>
       </tr>
     </thead>
   );
 }
 
-/**
- * Single holding row within a sector (desktop/tablet table view)
- * Uses AnimatedValue components for live data fields (CMP, Present Value, Gain/Loss)
- * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
- */
 const HoldingRow = memo(function HoldingRow({ holding }: { holding: Holding }) {
-  const gainLossColorClass = getGainLossColorClass(holding.gainLoss);
-  
+  const isProfit = holding.gainLoss >= 0;
+
   return (
-    <tr className="text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors active:bg-zinc-100 dark:active:bg-zinc-700/50">
-      <td className="px-3 py-2 text-zinc-900 dark:text-zinc-100 font-medium whitespace-nowrap">
-        {holding.particulars}
+    <tr className="group text-sm border-b border-border hover:bg-secondary/50 transition-all duration-200 last:border-0 bg-card cursor-pointer">
+      {/* Particulars & Badges */}
+      <td className="px-6 py-4 relative">
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-primary transition-colors"></div>
+        <div className="flex items-center gap-3">
+          <CompanyLogo name={holding.particulars} nseCode={holding.nseCode} size={32} className="shrink-0" />
+          <div className="flex flex-col">
+            <span className="font-bold text-foreground text-[15px]">{holding.particulars}</span>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
+                {holding.nseCode}
+              </span>
+              {holding.bseCode && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border">
+                  BSE
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {formatCurrency(holding.purchasePrice)}
-      </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {holding.quantity.toLocaleString('en-IN')}
-      </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {formatCurrency(holding.investment)}
-      </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {holding.portfolioPercentage.toFixed(2)}%
-      </td>
-      <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-        <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded">
-          {holding.nseCode}
-        </span>
-        {holding.bseCode && (
-          <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded ml-1">
-            {holding.bseCode}
+
+      {/* CMP */}
+      <td className="px-4 py-4 text-right">
+        <div className="flex flex-col items-end">
+          <AnimatedCurrency
+            value={holding.cmp}
+            className="font-semibold text-foreground"
+            showDirectionIndicator={true}
+          />
+          <span className="text-xs text-muted-foreground mt-1">
+            Qty: <span className="text-foreground font-medium">{holding.quantity}</span>
           </span>
-        )}
+        </div>
       </td>
-      {/* CMP - Animated for live updates */}
-      <td className="px-3 py-2 text-right text-zinc-900 dark:text-zinc-100 font-medium whitespace-nowrap">
-        <AnimatedCurrency value={holding.cmp} showDirectionIndicator={true} />
+
+      {/* Value & Investment */}
+      <td className="px-4 py-4 text-right">
+        <div className="flex flex-col items-end">
+          <AnimatedCurrency value={holding.presentValue} className="font-bold text-foreground text-[15px]" />
+          <span className="text-xs text-muted-foreground mt-1">
+            Inv: {formatCurrency(holding.investment)}
+          </span>
+        </div>
       </td>
-      {/* Present Value - Animated, recalculates when CMP updates */}
-      <td className="px-3 py-2 text-right text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
-        <AnimatedCurrency value={holding.presentValue} />
+
+      {/* P&L - Enhanced Separation */}
+      <td className="px-4 py-4 text-right">
+        <div className="flex flex-col items-end gap-1">
+          <span className={`font-bold text-[15px] ${isProfit ? 'text-emerald-500' : 'text-red-500'}`}>
+            {isProfit ? '+' : ''}<AnimatedCurrency value={holding.gainLoss} />
+          </span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isProfit
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+            : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+            }`}>
+            <AnimatedPercentage value={holding.gainLossPercentage} showSign={true} />
+          </span>
+        </div>
       </td>
-      {/* Gain/Loss - Animated, recalculates when Present Value updates */}
-      <td className={`px-3 py-2 text-right font-semibold whitespace-nowrap ${gainLossColorClass}`}>
-        <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
-        <span className="text-xs ml-1">
-          (<AnimatedPercentage value={holding.gainLossPercentage} showSign={true} className={gainLossColorClass} />)
-        </span>
+
+      {/* Trend Sparkline */}
+      <td className="px-4 py-4 text-center">
+        <TrendSparkline isPositive={isProfit} />
       </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {holding.peRatio !== null ? holding.peRatio.toFixed(2) : '—'}
+
+      {/* Portfolio % */}
+      <td className="px-4 py-4">
+        <PortfolioBar percentage={holding.portfolioPercentage} />
       </td>
-      <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-        {holding.latestEarnings ?? '—'}
+
+      {/* Fundamentals */}
+      <td className="px-4 py-4 text-right">
+        <div className="flex flex-col gap-1.5 text-xs">
+          <div className="flex justify-end items-center gap-2">
+            <span className="text-muted-foreground font-medium">P/E</span>
+            <span className="font-semibold text-foreground min-w-[30px]">{holding.peRatio?.toFixed(1) ?? '-'}</span>
+          </div>
+          {holding.latestEarnings && (
+            <div className="flex justify-end items-center gap-2">
+              <span className="text-muted-foreground font-medium">EPS</span>
+              <span className="font-semibold text-foreground min-w-[30px]">{holding.latestEarnings}</span>
+            </div>
+          )}
+        </div>
+      </td>
+
+      {/* Actions - Added Buttons */}
+      <td className="px-4 py-4 text-center">
+        <div className="flex justify-center items-center gap-1 opacity-60 group-hover:opacity-100 transition-all duration-200">
+          <button title="View Details" className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95">
+            <Eye size={16} />
+          </button>
+          <button title="Buy" className="p-1.5 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-500/10 rounded-md transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95">
+            <ShoppingCart size={16} />
+          </button>
+          <button title="Sell" className="p-1.5 text-red-600 dark:text-red-500 hover:bg-red-500/10 rounded-md transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95">
+            <DollarSign size={16} />
+          </button>
+        </div>
       </td>
     </tr>
   );
 });
 
-/**
- * Mobile card view for a single holding within a sector
- * Requirements: 7.3, 7.5 - Mobile-friendly layout with touch-friendly interactions
- * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
- */
+// Reuse existing HoldingCard logic but update styles
 const HoldingCard = memo(function HoldingCard({ holding, isExpanded, onToggle }: { holding: Holding; isExpanded: boolean; onToggle: () => void }) {
-  const gainLossColorClass = getGainLossColorClass(holding.gainLoss);
-  const bgClass = getGainLossBgClass(holding.gainLoss);
-  const borderClass = getGainLossBorderClass(holding.gainLoss);
-  
+  const isProfit = holding.gainLoss >= 0;
+
   return (
-    <div 
-      className={`bg-white dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden transition-all duration-200 ${isExpanded ? 'ring-2 ring-blue-500' : ''}`}
-    >
-      {/* Card Header - Always visible, touch-friendly */}
+    <div className={`bg-card rounded-xl border border-border overflow-hidden transition-all duration-300 ${isExpanded ? 'ring-1 ring-primary shadow-lg' : 'shadow-sm hover:shadow-md'}`}>
       <button
         onClick={onToggle}
-        className="w-full p-3 text-left active:bg-zinc-50 dark:active:bg-zinc-700/50 transition-colors touch-manipulation"
-        aria-expanded={isExpanded}
-        aria-label={`${holding.particulars} details`}
+        className="w-full p-4 text-left touch-manipulation cursor-pointer transition-all duration-200 hover:bg-secondary/30 active:bg-secondary/50"
       >
-        <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-zinc-900 dark:text-zinc-100 truncate text-sm">
-              {holding.particulars}
-            </h4>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-700 px-1 py-0.5 rounded">
-                {holding.nseCode}
-              </span>
+        {/* Simplified Mobile Card Layout for cleaner look */}
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex items-center gap-3">
+            <CompanyLogo name={holding.particulars} nseCode={holding.nseCode} size={40} />
+            <div>
+              <h4 className="font-semibold text-foreground text-sm">{holding.particulars}</h4>
+              <p className="text-xs text-muted-foreground">{holding.quantity} qty</p>
             </div>
           </div>
-          {/* Gain/Loss - Animated for live updates */}
-          <div className="flex flex-col items-end">
-            <span className={`font-bold text-sm ${gainLossColorClass}`}>
-              <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
-            </span>
-            <span className={`text-xs ${gainLossColorClass}`}>
-              <AnimatedPercentage value={holding.gainLossPercentage} showSign={true} className={gainLossColorClass} />
-            </span>
+          <div className="text-right">
+            <p className="font-bold text-foreground text-sm"><AnimatedCurrency value={holding.presentValue} /></p>
+            <p className={`text-xs font-medium ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {isProfit ? '+' : ''}<AnimatedPercentage value={holding.gainLossPercentage} />
+            </p>
           </div>
         </div>
-        
-        {/* Quick stats row - CMP and Present Value animated */}
-        <div className="flex justify-between items-center mt-2 text-xs">
-          <span className="text-zinc-500 dark:text-zinc-400">
-            CMP: <AnimatedCurrency value={holding.cmp} className="font-medium text-zinc-700 dark:text-zinc-300" showDirectionIndicator={true} />
-          </span>
-          <span className="text-zinc-500 dark:text-zinc-400">
-            Value: <AnimatedCurrency value={holding.presentValue} className="font-medium text-zinc-700 dark:text-zinc-300" />
-          </span>
-          <svg 
-            className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>CMP: <AnimatedCurrency value={holding.cmp} className="text-foreground font-medium" /></span>
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </button>
-      
-      {/* Expanded Details */}
+
       {isExpanded && (
-        <div className={`px-3 pb-3 pt-2 border-t ${borderClass} ${bgClass}`}>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Purchase</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(holding.purchasePrice)}</p>
+        <div className="px-4 pb-4 pt-1 border-t border-border bg-accent/50">
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs mt-2">
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Investment</p>
+              <p className="font-medium text-foreground">{formatCurrency(holding.investment)}</p>
             </div>
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Qty</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.quantity.toLocaleString('en-IN')}</p>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">P/L Amount</p>
+              <p className={`font-medium ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                <AnimatedCurrency value={holding.gainLoss} />
+              </p>
             </div>
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Investment</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(holding.investment)}</p>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Portfolio %</p>
+              <PortfolioBar percentage={holding.portfolioPercentage} />
             </div>
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Portfolio %</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.portfolioPercentage.toFixed(2)}%</p>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">Fundamentals</p>
+              <p className="text-foreground">P/E: {holding.peRatio?.toFixed(2) ?? '-'}</p>
             </div>
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">P/E Ratio</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.peRatio !== null ? holding.peRatio.toFixed(2) : '—'}</p>
-            </div>
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Earnings</span>
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">{holding.latestEarnings ?? '—'}</p>
-            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <button className="flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border text-muted-foreground bg-card hover:bg-secondary transition-all duration-200 text-xs font-medium cursor-pointer hover:scale-105 active:scale-95">
+              <Eye size={14} /> Details
+            </button>
+            <button className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-all duration-200 text-xs font-medium cursor-pointer hover:scale-105 active:scale-95">
+              <ShoppingCart size={14} /> Buy
+            </button>
+            <button className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/25 transition-all duration-200 text-xs font-medium cursor-pointer hover:scale-105 active:scale-95">
+              <DollarSign size={14} /> Sell
+            </button>
           </div>
         </div>
       )}
@@ -220,18 +265,15 @@ const HoldingCard = memo(function HoldingCard({ holding, isExpanded, onToggle }:
   );
 });
 
-/**
- * Mobile card list view for holdings within a sector
- */
 function HoldingCardList({ holdings }: { holdings: Holding[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  
+
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
-  
+
   return (
-    <div className="space-y-2 p-3">
+    <div className="space-y-3">
       {holdings.map((holding) => (
         <HoldingCard
           key={holding.id}
@@ -244,209 +286,66 @@ function HoldingCardList({ holdings }: { holdings: Holding[] }) {
   );
 }
 
-/**
- * Large sector table for sector groups with >50 holdings
- * Uses scrollable container for performance
- * Requirements: 10.2, 10.3 - Performance optimization
- * Note: Virtual scrolling temporarily disabled due to react-window v2 API changes
- */
-function LargeSectorTable({ holdings }: { holdings: Holding[] }) {
-  return (
-    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600 max-h-[400px] overflow-y-auto">
-      <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-        <HoldingsTableHeader />
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-          {holdings.map((holding) => (
-            <HoldingRow key={holding.id} holding={holding} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-
-/**
- * Sector summary component displaying aggregated metrics
- * Requirements: 6.3, 6.4, 6.5 - Display Total Investment, Total Present Value, and Gain/Loss per sector
- * Requirements: 7.3, 7.4, 7.5 - Responsive layout for all screen sizes
- * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
- */
 const SectorSummarySection = memo(function SectorSummarySection({ summary }: { summary: SectorSummary }) {
-  const gainLossColorClass = getGainLossColorClass(summary.totalGainLoss);
-  const bgClass = getGainLossBgClass(summary.totalGainLoss);
-  const borderClass = getGainLossBorderClass(summary.totalGainLoss);
-  
+  const isProfit = summary.totalGainLoss >= 0;
+
   return (
-    <div className={`px-3 sm:px-4 py-3 border-t ${borderClass} ${bgClass}`}>
-      {/* Mobile layout - stacked grid */}
-      <div className="block sm:hidden">
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          {/* Total Investment */}
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Investment
-            </span>
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {formatCurrency(summary.totalInvestment)}
-            </span>
-          </div>
-          
-          {/* Total Present Value - Animated */}
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Present Value
-            </span>
-            <AnimatedCurrency 
-              value={summary.totalPresentValue} 
-              className="text-sm font-semibold text-zinc-900 dark:text-zinc-100" 
-            />
-          </div>
+    <div className="bg-accent border-t border-border px-6 py-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+      <div className="flex gap-8">
+        <div>
+          <span className="text-xs text-muted-foreground uppercase tracking-wider block mb-1">Total Investment</span>
+          <span className="font-semibold text-foreground text-sm sm:text-base">{formatCurrency(summary.totalInvestment)}</span>
         </div>
-        
-        {/* Gain/Loss row with badge - Animated */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Gain/Loss
-            </span>
-            <span className={`text-sm font-bold ${gainLossColorClass}`}>
-              <AnimatedCurrency value={summary.totalGainLoss} className={gainLossColorClass} />
-              <span className="text-xs ml-1">
-                (<AnimatedPercentage value={summary.gainLossPercentage} showSign={true} className={gainLossColorClass} />)
-              </span>
-            </span>
-          </div>
-          
-          {/* Sector summary badge */}
-          <div className={`px-2.5 py-1 rounded-full text-xs font-medium ${gainLossColorClass} ${bgClass} border ${borderClass}`}>
-            {summary.totalGainLoss >= 0 ? 'Profit' : 'Loss'}
-          </div>
+        <div>
+          <span className="text-xs text-muted-foreground uppercase tracking-wider block mb-1">Current Value</span>
+          <span className="font-semibold text-foreground text-sm sm:text-base"><AnimatedCurrency value={summary.totalPresentValue} /></span>
         </div>
       </div>
-      
-      {/* Tablet/Desktop layout - horizontal flex */}
-      <div className="hidden sm:flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 md:gap-6">
-          {/* Total Investment */}
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Total Investment
-            </span>
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {formatCurrency(summary.totalInvestment)}
-            </span>
-          </div>
-          
-          {/* Total Present Value - Animated */}
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Present Value
-            </span>
-            <AnimatedCurrency 
-              value={summary.totalPresentValue} 
-              className="text-sm font-semibold text-zinc-900 dark:text-zinc-100" 
-            />
-          </div>
-          
-          {/* Gain/Loss with color coding - Animated */}
-          <div className="flex flex-col">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              Gain/Loss
-            </span>
-            <span className={`text-sm font-bold ${gainLossColorClass}`}>
-              <AnimatedCurrency value={summary.totalGainLoss} className={gainLossColorClass} />
-              <span className="text-xs ml-1">
-                (<AnimatedPercentage value={summary.gainLossPercentage} showSign={true} className={gainLossColorClass} />)
-              </span>
-            </span>
-          </div>
-        </div>
-        
-        {/* Sector summary badge */}
-        <div className={`px-3 py-1 rounded-full text-xs font-medium ${gainLossColorClass} ${bgClass} border ${borderClass}`}>
-          {summary.totalGainLoss >= 0 ? 'Profit' : 'Loss'}
-        </div>
+
+      <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-lg border border-border shadow-sm">
+        <span className="text-xs font-medium text-muted-foreground">Sector P&L</span>
+        <div className="h-4 w-px bg-border"></div>
+        <span className={`font-bold text-sm ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+          {isProfit ? '+' : ''}<AnimatedCurrency value={summary.totalGainLoss} />
+        </span>
+        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isProfit ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400'}`}>
+          <AnimatedPercentage value={summary.gainLossPercentage} />
+        </span>
       </div>
     </div>
   );
 });
 
-/**
- * SectorGroup Component
- * 
- * Groups holdings by sector with a header and summary section.
- * Displays all holdings within the sector in a table format on desktop/tablet,
- * and a card view on mobile devices.
- * 
- * Optimizations:
- * - React.memo to prevent unnecessary re-renders
- * - Memoized child components (HoldingRow, HoldingCard, SectorSummarySection)
- * - Efficient state management for mobile card expansion
- * 
- * Requirements:
- * - 6.1: Group stocks by Sector
- * - 6.2: Show a sector header for each group
- * - 6.3: Calculate and display Total Investment per sector
- * - 6.4: Calculate and display Total Present Value per sector
- * - 6.5: Calculate and display Gain/Loss per sector
- * - 7.1: Display full table layout optimally on desktop
- * - 7.2: Adapt layout for medium screens (tablet)
- * - 7.3: Adapt layout for small screens (mobile)
- * - 7.4: Adjust layout responsively when viewport changes
- * - 7.5: Maintain readability and usability on small screens
- * - 10.2, 10.3: Performance optimizations with memoization
- * 
- * @param sector - The sector name
- * @param holdings - Array of holdings in this sector
- * @param summary - Aggregated summary for the sector
- */
 function SectorGroupComponent({ sector, holdings, summary }: SectorGroupProps) {
-  if (holdings.length === 0) {
-    return null;
-  }
+  if (holdings.length === 0) return null;
 
   return (
-    <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-md overflow-hidden mb-4 sm:mb-6">
-      {/* Sector Header */}
+    <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
       <SectorHeader sector={sector} holdingsCount={holdings.length} />
-      
-      {/* Mobile Card View - visible on small screens (< 768px) */}
-      <div className="block md:hidden">
+
+      {/* Mobile Card View */}
+      <div className="md:hidden p-4">
         <HoldingCardList holdings={holdings} />
       </div>
-      
-      {/* Desktop/Tablet Table View - visible on medium screens and up (>= 768px) */}
+
+      {/* Desktop Table View */}
       <div className="hidden md:block">
-        {holdings.length > 50 ? (
-          // Use optimized table for large sector groups (>50 holdings)
-          // Requirements: 10.2, 10.3 - Performance optimization
-          <LargeSectorTable holdings={holdings} />
-        ) : (
-          // Use regular table for smaller sector groups
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
-            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-              <HoldingsTableHeader />
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                {holdings.map((holding) => (
-                  <HoldingRow key={holding.id} holding={holding} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left">
+            <HoldingsTableHeader />
+            <tbody>
+              {holdings.map((holding) => (
+                <HoldingRow key={holding.id} holding={holding} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      
-      {/* Sector Summary */}
+
       <SectorSummarySection summary={summary} />
     </div>
   );
 }
 
-/**
- * Memoized SectorGroup component to prevent unnecessary re-renders
- * Requirements: 10.2, 10.3 - Performance optimization with memoization
- */
 export const SectorGroup = memo(SectorGroupComponent);
-
 export default SectorGroup;

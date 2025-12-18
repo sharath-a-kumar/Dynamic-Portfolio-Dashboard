@@ -209,11 +209,26 @@ const HoldingRow = memo(function HoldingRow({ holding }: { holding: Holding }) {
         <AnimatedCurrency value={holding.presentValue} />
       </td>
       
-      {/* Gain/Loss - Animated, recalculates when Present Value updates */}
-      <td className={`px-3 py-3 text-right font-semibold whitespace-nowrap ${gainLossColorClass}`}>
-        <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
-        <span className="text-xs ml-1">
-          (<AnimatedPercentage value={holding.gainLossPercentage} showSign={false} className={gainLossColorClass} />)
+      {/* Gain/Loss - Google Finance style with arrow */}
+      <td className="px-3 py-3 text-right whitespace-nowrap">
+        <span className={`inline-flex items-center gap-1 font-semibold ${gainLossColorClass}`}>
+          {holding.gainLoss !== 0 && (
+            <svg
+              className={`w-3.5 h-3.5 ${holding.gainLoss > 0 ? '' : 'rotate-180'}`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+          <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
+          <span className="text-xs opacity-80">
+            (<AnimatedPercentage value={holding.gainLossPercentage} showSign={true} className={gainLossColorClass} />)
+          </span>
         </span>
       </td>
       
@@ -267,13 +282,26 @@ const HoldingCard = memo(function HoldingCard({ holding, isExpanded, onToggle }:
               )}
             </div>
           </div>
-          {/* Gain/Loss - Animated for live updates */}
+          {/* Gain/Loss - Google Finance style with arrow */}
           <div className="flex flex-col items-end">
-            <span className={`font-bold ${gainLossColorClass}`}>
+            <span className={`inline-flex items-center gap-0.5 font-bold ${gainLossColorClass}`}>
+              {holding.gainLoss !== 0 && (
+                <svg
+                  className={`w-3 h-3 ${holding.gainLoss > 0 ? '' : 'rotate-180'}`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              )}
               <AnimatedCurrency value={holding.gainLoss} className={gainLossColorClass} />
             </span>
             <span className={`text-xs ${gainLossColorClass}`}>
-              <AnimatedPercentage value={holding.gainLossPercentage} showSign={false} className={gainLossColorClass} />
+              <AnimatedPercentage value={holding.gainLossPercentage} showSign={true} className={gainLossColorClass} />
             </span>
           </div>
         </div>
