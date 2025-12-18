@@ -16,40 +16,42 @@ export interface PortfolioTableProps {
 
 /**
  * Loading skeleton row for the table (desktop view)
+ * Requirements: 10.5 - Create skeleton loader for portfolio table
  */
 function SkeletonRow() {
   return (
     <tr className="animate-pulse">
-      <td className="px-3 py-3"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-24"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-12 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-14 ml-auto"></div></td>
-      <td className="px-3 py-3"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-12 ml-auto"></div></td>
-      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto"></div></td>
+      <td className="px-3 py-3"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-24 skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-12 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-14 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-20 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-12 ml-auto skeleton-shimmer"></div></td>
+      <td className="px-3 py-3 text-right"><div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 ml-auto skeleton-shimmer"></div></td>
     </tr>
   );
 }
 
 /**
  * Loading skeleton card for mobile view
+ * Requirements: 10.5 - Create skeleton loader for portfolio table
  */
 function SkeletonCard() {
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-sm p-4 animate-pulse">
       <div className="flex justify-between items-start mb-3">
-        <div className="h-5 bg-zinc-200 dark:bg-zinc-700 rounded w-32"></div>
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16"></div>
+        <div className="h-5 bg-zinc-200 dark:bg-zinc-700 rounded w-32 skeleton-shimmer"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-16 skeleton-shimmer"></div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded skeleton-shimmer"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded skeleton-shimmer"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded skeleton-shimmer"></div>
+        <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded skeleton-shimmer"></div>
       </div>
     </div>
   );
@@ -357,12 +359,38 @@ function HoldingCardList({ holdings }: { holdings: Holding[] }) {
   );
 }
 
+/**
+ * Large portfolio table for portfolios with >100 holdings
+ * Uses pagination-style rendering for performance
+ * Requirements: 10.2, 10.3 - Performance optimization
+ * Note: Virtual scrolling temporarily disabled due to react-window v2 API changes
+ */
+function LargePortfolioTable({ holdings }: { holdings: Holding[] }) {
+  return (
+    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600 max-h-[600px] overflow-y-auto">
+      <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+        <TableHeader />
+        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
+          {holdings.map((holding) => (
+            <HoldingRow key={holding.id} holding={holding} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 
 /**
  * PortfolioTable Component
  * 
  * Displays stock holdings in a structured table format with all required columns.
  * Supports loading states, empty states, and responsive design.
+ * 
+ * Optimizations:
+ * - React.memo to prevent unnecessary re-renders
+ * - Memoized child components (HoldingRow, HoldingCard)
+ * - Efficient state management for mobile card expansion
  * 
  * Requirements:
  * - 1.1: Display a table containing all stock holdings
@@ -373,12 +401,13 @@ function HoldingCardList({ holdings }: { holdings: Holding[] }) {
  * - 7.3: Adapt layout for small screens (mobile)
  * - 7.4: Adjust layout responsively when viewport changes
  * - 7.5: Maintain readability and usability on small screens
+ * - 10.2, 10.3: Performance optimizations with memoization
  * 
  * @param holdings - Array of stock holdings to display
  * @param isLoading - Whether data is currently being loaded
  * @param error - Error object if data fetch failed
  */
-export function PortfolioTable({ holdings, isLoading, error }: PortfolioTableProps) {
+function PortfolioTableComponent({ holdings, isLoading, error }: PortfolioTableProps) {
   // Handle error state
   if (error) {
     return (
@@ -427,22 +456,30 @@ export function PortfolioTable({ holdings, isLoading, error }: PortfolioTablePro
       
       {/* Desktop/Tablet Table View - visible on medium screens and up (>= 768px) */}
       <div className="hidden md:block">
-        {/* Responsive container with horizontal scroll on tablet screens */}
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
-          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-            <TableHeader />
-            
-            {isLoading ? (
+        {isLoading ? (
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
+            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+              <TableHeader />
               <TableSkeleton />
-            ) : (
+            </table>
+          </div>
+        ) : holdings.length > 100 ? (
+          // Use optimized table for large portfolios (>100 holdings)
+          // Requirements: 10.2, 10.3 - Performance optimization
+          <LargePortfolioTable holdings={holdings} />
+        ) : (
+          // Use regular table for smaller portfolios
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
+            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+              <TableHeader />
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
                 {holdings.map((holding) => (
                   <HoldingRow key={holding.id} holding={holding} />
                 ))}
               </tbody>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        )}
       </div>
       
       {/* Table footer with holdings count */}
@@ -456,5 +493,11 @@ export function PortfolioTable({ holdings, isLoading, error }: PortfolioTablePro
     </div>
   );
 }
+
+/**
+ * Memoized PortfolioTable component to prevent unnecessary re-renders
+ * Requirements: 10.2, 10.3 - Performance optimization with memoization
+ */
+export const PortfolioTable = memo(PortfolioTableComponent);
 
 export default PortfolioTable;

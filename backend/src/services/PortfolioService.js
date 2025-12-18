@@ -94,6 +94,26 @@ class PortfolioService {
             // Parse NSE/BSE codes (can be string NSE code or numeric BSE code)
             const [nse, bse] = this._parseNseBseCodes(stockCode);
             
+            // Extract P/E ratio and Latest Earnings from Excel if available
+            const peRatioValue = row['__EMPTY_12'];
+            const latestEarningsValue = row['__EMPTY_13'];
+            
+            // Parse P/E ratio (can be number or string)
+            let peRatio = null;
+            if (peRatioValue !== undefined && peRatioValue !== null && peRatioValue !== '') {
+              const parsed = Number(peRatioValue);
+              if (!isNaN(parsed) && parsed !== 0) {
+                peRatio = parsed;
+              }
+            }
+            
+            // Parse Latest Earnings (can be number or string)
+            let latestEarnings = null;
+            if (latestEarningsValue !== undefined && latestEarningsValue !== null && latestEarningsValue !== '') {
+              // Convert to string and trim
+              latestEarnings = String(latestEarningsValue).trim();
+            }
+            
             // Create holding
             const holding = createHolding({
               particulars: particularsValue.trim(),
@@ -103,8 +123,8 @@ class PortfolioService {
               bseCode: bse,
               sector: currentSector,
               cmp: 0, // Will be fetched from Yahoo Finance
-              peRatio: null, // Will be fetched from Google Finance
-              latestEarnings: null // Will be fetched from Google Finance
+              peRatio: peRatio, // Read from Excel
+              latestEarnings: latestEarnings // Read from Excel
             });
             
             holdings.push(holding);
@@ -345,16 +365,17 @@ class PortfolioService {
       // Get CMP from Yahoo Finance
       const cmp = cmpMap.get(yahooSymbol);
       
-      // Get financial metrics from Google Finance
+      // Get financial metrics from Google Finance (if available)
+      // Otherwise, preserve the values already read from Excel
       const financialData = financialMap.get(yahooSymbol);
-      const peRatio = financialData?.peRatio ?? null;
-      const latestEarnings = financialData?.latestEarnings ?? null;
+      const peRatio = financialData?.peRatio ?? holding.peRatio;
+      const latestEarnings = financialData?.latestEarnings ?? holding.latestEarnings;
 
       // If CMP is available, calculate all metrics
       if (cmp !== undefined && cmp !== null) {
         const enrichedHolding = this.calculateMetrics(holding, cmp);
         
-        // Add financial metrics
+        // Add financial metrics (preserve Excel values if Google Finance not available)
         enrichedHolding.peRatio = peRatio;
         enrichedHolding.latestEarnings = latestEarnings;
         

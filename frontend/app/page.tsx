@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { usePortfolio, useErrorHandler } from '@/hooks';
-import { SectorGroup, AutoRefresh, ErrorBoundary, useToast } from '@/components';
+import { SectorGroup, AutoRefresh, ErrorBoundary, useToast, LoadingBar } from '@/components';
 import { parseApiErrors } from '@/utils';
 import type { Holding, SectorSummary } from '@/types';
 
@@ -47,25 +47,26 @@ function groupHoldingsBySector(holdings: Holding[]): Map<string, { holdings: Hol
 
 /**
  * Loading skeleton for sector groups
+ * Requirements: 10.5 - Create skeleton loader for portfolio table
  */
 function SectorGroupSkeleton() {
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-md overflow-hidden mb-6 animate-pulse">
       <div className="px-4 py-3 bg-zinc-100 dark:bg-zinc-700/50 border-b border-zinc-200 dark:border-zinc-600">
-        <div className="h-6 bg-zinc-200 dark:bg-zinc-600 rounded w-32"></div>
+        <div className="h-6 bg-zinc-200 dark:bg-zinc-600 rounded w-32 skeleton-shimmer"></div>
       </div>
       <div className="p-4">
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-10 bg-zinc-100 dark:bg-zinc-700 rounded"></div>
+            <div key={i} className="h-10 bg-zinc-100 dark:bg-zinc-700 rounded skeleton-shimmer"></div>
           ))}
         </div>
       </div>
       <div className="px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-200 dark:border-zinc-700">
         <div className="flex gap-6">
-          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24"></div>
-          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24"></div>
-          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24"></div>
+          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24 skeleton-shimmer"></div>
+          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24 skeleton-shimmer"></div>
+          <div className="h-8 bg-zinc-200 dark:bg-zinc-600 rounded w-24 skeleton-shimmer"></div>
         </div>
       </div>
     </div>
@@ -208,6 +209,18 @@ function DashboardContent() {
     showToasts: false, // We handle toasts manually for more control
   });
 
+  // Memoized callback for toggling auto-refresh
+  // Requirements: 10.2, 10.3 - Performance optimization with useCallback
+  const handleToggleAutoRefresh = useCallback(() => {
+    setAutoRefreshEnabled(prev => !prev);
+  }, []);
+
+  // Memoized callback for manual refresh
+  // Requirements: 10.2, 10.3 - Performance optimization with useCallback
+  const handleManualRefresh = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
+
   // Show toast notifications for API errors from the response
   useEffect(() => {
     if (data?.errors && data.errors.length > 0) {
@@ -246,6 +259,10 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 p-3 sm:p-4 md:p-6 lg:p-8">
+      {/* Global loading bar - shows during initial load and refresh */}
+      {/* Requirements: 10.5 - Show loading indicator during data fetch */}
+      <LoadingBar isLoading={isLoading || isRefetching} variant={isRefetching ? 'success' : 'primary'} />
+      
       <div className="max-w-[1600px] mx-auto">
         {/* Header section - Responsive layout for all screen sizes */}
         {/* Requirements: 7.1, 7.2, 7.3, 7.4, 7.5 */}
@@ -268,14 +285,14 @@ function DashboardContent() {
               {/* Auto-refresh indicator */}
               <AutoRefresh
                 interval={15000}
-                onRefresh={refresh}
+                onRefresh={handleManualRefresh}
                 enabled={autoRefreshEnabled}
                 showIndicator={true}
               />
               
               {/* Auto-refresh toggle */}
               <button
-                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                onClick={handleToggleAutoRefresh}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   autoRefreshEnabled
                     ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
@@ -288,7 +305,7 @@ function DashboardContent() {
               
               {/* Manual refresh button */}
               <button
-                onClick={() => refresh()}
+                onClick={handleManualRefresh}
                 disabled={isRefetching}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
@@ -308,7 +325,7 @@ function DashboardContent() {
             {/* Auto-refresh indicator */}
             <AutoRefresh
               interval={15000}
-              onRefresh={refresh}
+              onRefresh={handleManualRefresh}
               enabled={autoRefreshEnabled}
               showIndicator={true}
             />
@@ -316,7 +333,7 @@ function DashboardContent() {
             <div className="flex items-center gap-2">
               {/* Auto-refresh toggle - compact on mobile */}
               <button
-                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                onClick={handleToggleAutoRefresh}
                 className={`px-2.5 py-1.5 text-xs rounded-md transition-colors touch-manipulation ${
                   autoRefreshEnabled
                     ? 'bg-green-100 text-green-700 active:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
@@ -329,7 +346,7 @@ function DashboardContent() {
               
               {/* Manual refresh button - compact on mobile */}
               <button
-                onClick={() => refresh()}
+                onClick={handleManualRefresh}
                 disabled={isRefetching}
                 className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 touch-manipulation"
               >
@@ -396,7 +413,7 @@ function DashboardContent() {
                 </ul>
               </div>
               <button
-                onClick={() => refresh()}
+                onClick={handleManualRefresh}
                 disabled={isRefetching}
                 className="ml-2 sm:ml-4 text-yellow-600 dark:text-yellow-400 active:text-yellow-700 dark:active:text-yellow-300 text-xs sm:text-sm font-medium whitespace-nowrap touch-manipulation"
               >
@@ -409,9 +426,10 @@ function DashboardContent() {
         {/* Error State - Requirements 8.1, 8.2, 8.3, 8.5 */}
         {error && <ErrorState error={error} onRetry={retry} isRetrying={isRetrying} />}
 
-        {/* Loading State */}
+        {/* Loading State - with smooth fade transition */}
+        {/* Requirements: 10.5 - Ensure smooth transition from loading to loaded state */}
         {isLoading && !error && (
-          <div>
+          <div className="animate-fade-in">
             {Array.from({ length: 3 }).map((_, i) => (
               <SectorGroupSkeleton key={i} />
             ))}
@@ -421,9 +439,21 @@ function DashboardContent() {
         {/* Empty State */}
         {!isLoading && !error && sortedSectors.length === 0 && <EmptyState />}
 
-        {/* Portfolio grouped by sectors */}
+        {/* Portfolio grouped by sectors - with smooth fade-in transition */}
+        {/* Requirements: 10.5 - Ensure smooth transition from loading to loaded state */}
         {!isLoading && !error && sortedSectors.length > 0 && (
-          <div>
+          <div className="animate-fade-in">
+            {/* Refreshing overlay indicator */}
+            {isRefetching && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <svg className="animate-spin h-4 w-4 text-blue-500" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Updating prices...</span>
+              </div>
+            )}
+            
             {sortedSectors.map((sector) => {
               const sectorData = sectorGroups.get(sector)!;
               return (

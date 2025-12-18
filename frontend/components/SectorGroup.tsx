@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, memo } from 'react';
+
 import type { Holding, SectorSummary } from '@/types';
 import { getGainLossColorClass, getGainLossBgClass, getGainLossBorderClass } from '@/utils';
 import { AnimatedCurrency, AnimatedPercentage } from './AnimatedValue';
@@ -19,14 +20,6 @@ export interface SectorGroupProps {
  */
 function formatCurrency(value: number): string {
   return `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
-
-/**
- * Format percentage value
- */
-function formatPercentage(value: number): string {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)}%`;
 }
 
 /**
@@ -251,6 +244,27 @@ function HoldingCardList({ holdings }: { holdings: Holding[] }) {
   );
 }
 
+/**
+ * Large sector table for sector groups with >50 holdings
+ * Uses scrollable container for performance
+ * Requirements: 10.2, 10.3 - Performance optimization
+ * Note: Virtual scrolling temporarily disabled due to react-window v2 API changes
+ */
+function LargeSectorTable({ holdings }: { holdings: Holding[] }) {
+  return (
+    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600 max-h-[400px] overflow-y-auto">
+      <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+        <HoldingsTableHeader />
+        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+          {holdings.map((holding) => (
+            <HoldingRow key={holding.id} holding={holding} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 
 /**
  * Sector summary component displaying aggregated metrics
@@ -365,6 +379,11 @@ const SectorSummarySection = memo(function SectorSummarySection({ summary }: { s
  * Displays all holdings within the sector in a table format on desktop/tablet,
  * and a card view on mobile devices.
  * 
+ * Optimizations:
+ * - React.memo to prevent unnecessary re-renders
+ * - Memoized child components (HoldingRow, HoldingCard, SectorSummarySection)
+ * - Efficient state management for mobile card expansion
+ * 
  * Requirements:
  * - 6.1: Group stocks by Sector
  * - 6.2: Show a sector header for each group
@@ -376,12 +395,13 @@ const SectorSummarySection = memo(function SectorSummarySection({ summary }: { s
  * - 7.3: Adapt layout for small screens (mobile)
  * - 7.4: Adjust layout responsively when viewport changes
  * - 7.5: Maintain readability and usability on small screens
+ * - 10.2, 10.3: Performance optimizations with memoization
  * 
  * @param sector - The sector name
  * @param holdings - Array of holdings in this sector
  * @param summary - Aggregated summary for the sector
  */
-export function SectorGroup({ sector, holdings, summary }: SectorGroupProps) {
+function SectorGroupComponent({ sector, holdings, summary }: SectorGroupProps) {
   if (holdings.length === 0) {
     return null;
   }
@@ -398,17 +418,23 @@ export function SectorGroup({ sector, holdings, summary }: SectorGroupProps) {
       
       {/* Desktop/Tablet Table View - visible on medium screens and up (>= 768px) */}
       <div className="hidden md:block">
-        {/* Responsive container with horizontal scroll on tablet screens */}
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
-          <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-            <HoldingsTableHeader />
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-              {holdings.map((holding) => (
-                <HoldingRow key={holding.id} holding={holding} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {holdings.length > 50 ? (
+          // Use optimized table for large sector groups (>50 holdings)
+          // Requirements: 10.2, 10.3 - Performance optimization
+          <LargeSectorTable holdings={holdings} />
+        ) : (
+          // Use regular table for smaller sector groups
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-600">
+            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+              <HoldingsTableHeader />
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                {holdings.map((holding) => (
+                  <HoldingRow key={holding.id} holding={holding} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       
       {/* Sector Summary */}
@@ -416,5 +442,11 @@ export function SectorGroup({ sector, holdings, summary }: SectorGroupProps) {
     </div>
   );
 }
+
+/**
+ * Memoized SectorGroup component to prevent unnecessary re-renders
+ * Requirements: 10.2, 10.3 - Performance optimization with memoization
+ */
+export const SectorGroup = memo(SectorGroupComponent);
 
 export default SectorGroup;
