@@ -18,12 +18,22 @@ class YahooFinanceService {
    */
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
-    this.cacheTTL = options.cacheTTL || 10; // 10 seconds default
+    this.cacheTTL = options.cacheTTL || 30; // 30 seconds default (increased from 10)
     this.maxRetries = options.maxRetries || 1; // Reduced retries for faster loading
-    this.initialRetryDelay = options.initialRetryDelay || 500; // 500ms
+    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
+    this.rateLimitBackoff = 60000; // 60 seconds backoff when rate limited
+    this.lastRateLimitTime = 0;
     
     // Initialize yahoo-finance2 instance
     this.yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+  }
+
+  /**
+   * Check if we're currently in rate limit backoff period
+   * @returns {boolean}
+   */
+  isRateLimited() {
+    return Date.now() - this.lastRateLimitTime < this.rateLimitBackoff;
   }
 
   /**
@@ -43,6 +53,12 @@ class YahooFinanceService {
     
     if (cachedPrice !== undefined) {
       return cachedPrice;
+    }
+
+    // If rate limited, return null instead of making more requests
+    if (this.isRateLimited()) {
+      console.log(`Rate limited, skipping fetch for ${symbol}`);
+      return null;
     }
 
     // Fetch with retry logic
@@ -93,6 +109,12 @@ class YahooFinanceService {
       return priceMap;
     }
 
+    // If rate limited, return only cached data
+    if (this.isRateLimited()) {
+      console.log('Rate limited, returning cached data only');
+      return priceMap;
+    }
+
     // Fetch all uncached symbols in a single batch API call
     try {
       const quotes = await this.yahooFinance.quote(uncachedSymbols);
@@ -111,20 +133,30 @@ class YahooFinanceService {
         }
       }
     } catch (error) {
-      // If batch fails, fall back to individual requests
+      // Check if it's a rate limit error
+      if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
+        console.warn('Rate limited by Yahoo Finance, backing off for 60 seconds');
+        this.lastRateLimitTime = Date.now();
+        return priceMap; // Return whatever we have cached
+      }
+      
+      // If batch fails for other reasons, try individual requests with delay
       console.warn('Batch quote failed, falling back to individual requests:', error.message);
       
-      const pricePromises = uncachedSymbols.map(symbol => 
-        this.getCurrentPrice(symbol)
-          .then(price => ({ symbol, price }))
-          .catch(() => ({ symbol, price: null }))
-      );
-
-      const results = await Promise.all(pricePromises);
-      
-      for (const { symbol, price } of results) {
-        if (price !== null) {
-          priceMap.set(symbol, price);
+      // Add delay between individual requests to avoid rate limiting
+      for (const symbol of uncachedSymbols) {
+        try {
+          const price = await this.getCurrentPrice(symbol);
+          if (price !== null) {
+            priceMap.set(symbol, price);
+          }
+          // Small delay between requests
+          await this._sleep(100);
+        } catch (err) {
+          if (err.message?.includes('429') || err.message?.includes('Too Many Requests')) {
+            this.lastRateLimitTime = Date.now();
+            break; // Stop making requests if rate limited
+          }
         }
       }
     }

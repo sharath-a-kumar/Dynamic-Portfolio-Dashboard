@@ -9,7 +9,7 @@ const router = express.Router();
 // Initialize services
 const cacheService = new CacheService();
 const yahooFinanceService = new YahooFinanceService(cacheService, {
-  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 10
+  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 30 // Increased default to 30 seconds
 });
 const googleFinanceService = new GoogleFinanceService(cacheService, {
   cacheTTL: parseInt(process.env.CACHE_TTL_FINANCIALS) || 3600
@@ -19,6 +19,11 @@ const portfolioService = new PortfolioService();
 // Store portfolio data in memory (could be moved to a database later)
 let cachedPortfolioData = null;
 let lastLoadTime = null;
+
+// Cache for enriched response to reduce API calls
+let cachedEnrichedResponse = null;
+let lastEnrichTime = null;
+const ENRICH_CACHE_TTL = 15000; // 15 seconds - matches frontend refresh interval
 
 /**
  * GET /api/portfolio
@@ -35,10 +40,21 @@ router.get('/', async (req, res, next) => {
       });
     }
 
+    // Check if we have a recent cached response (within 15 seconds)
+    const now = Date.now();
+    if (cachedEnrichedResponse && lastEnrichTime && (now - lastEnrichTime < ENRICH_CACHE_TTL)) {
+      // Return cached response with updated timestamp
+      return res.json({
+        ...cachedEnrichedResponse,
+        lastUpdated: new Date().toISOString(),
+        cached: true
+      });
+    }
+
     // Load portfolio from Excel if not cached or if it's been more than 5 minutes
     const shouldReload = !cachedPortfolioData || 
                         !lastLoadTime || 
-                        (Date.now() - lastLoadTime > 5 * 60 * 1000);
+                        (now - lastLoadTime > 5 * 60 * 1000);
 
     let baseHoldings;
     let parseErrors = [];
@@ -48,7 +64,7 @@ router.get('/', async (req, res, next) => {
       baseHoldings = result.holdings;
       parseErrors = result.errors || [];
       cachedPortfolioData = baseHoldings;
-      lastLoadTime = Date.now();
+      lastLoadTime = now;
     } else {
       baseHoldings = cachedPortfolioData;
     }
@@ -72,6 +88,14 @@ router.get('/', async (req, res, next) => {
         summary
       });
     }
+
+    // Cache the enriched response
+    cachedEnrichedResponse = {
+      holdings,
+      sectors,
+      errors: [...parseErrors, ...errors]
+    };
+    lastEnrichTime = now;
 
     res.json({
       holdings,
@@ -146,3 +170,4 @@ router.get('/refresh', async (req, res, next) => {
 });
 
 export default router;
+``
