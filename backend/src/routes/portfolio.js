@@ -9,7 +9,7 @@ const router = express.Router();
 // Initialize services
 const cacheService = new CacheService();
 const yahooFinanceService = new YahooFinanceService(cacheService, {
-  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 30 // Increased default to 30 seconds
+  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 60 // 60 seconds default for cloud deployment
 });
 const googleFinanceService = new GoogleFinanceService(cacheService, {
   cacheTTL: parseInt(process.env.CACHE_TTL_FINANCIALS) || 3600
@@ -23,7 +23,7 @@ let lastLoadTime = null;
 // Cache for enriched response to reduce API calls
 let cachedEnrichedResponse = null;
 let lastEnrichTime = null;
-const ENRICH_CACHE_TTL = 30000; // 30 seconds - increased to reduce Yahoo Finance calls
+const ENRICH_CACHE_TTL = 45000; // 45 seconds - increased to reduce Yahoo Finance calls on cloud
 
 /**
  * GET /api/portfolio

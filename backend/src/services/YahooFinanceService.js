@@ -1,4 +1,4 @@
-import YahooFinance from 'yahoo-finance2';
+import axios from 'axios';
 import { createYahooError } from '../models/ApiError.js';
 
 /**
@@ -8,8 +8,9 @@ import { createYahooError } from '../models/ApiError.js';
  * - Fetch current market price (CMP) for individual stocks
  * - Batch fetch prices for multiple stocks
  * - Retry logic with exponential backoff
- * - Integration with CacheService (10-second TTL)
+ * - Integration with CacheService
  * - Rate limiting and error handling
+ * - Uses direct API calls with browser-like headers to avoid rate limiting
  */
 class YahooFinanceService {
   /**
@@ -18,14 +19,24 @@ class YahooFinanceService {
    */
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
-    this.cacheTTL = options.cacheTTL || 30; // 30 seconds default (increased from 10)
-    this.maxRetries = options.maxRetries || 1; // Reduced retries for faster loading
-    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
-    this.rateLimitBackoff = 30000; // 30 seconds backoff when rate limited (reduced from 60)
+    this.cacheTTL = options.cacheTTL || 60; // 60 seconds default (increased for cloud)
+    this.maxRetries = options.maxRetries || 2;
+    this.initialRetryDelay = options.initialRetryDelay || 2000; // 2 seconds
+    this.rateLimitBackoff = 30000; // 30 seconds backoff when rate limited
     this.lastRateLimitTime = 0;
     
-    // Initialize yahoo-finance2 instance
-    this.yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    // Create axios instance with browser-like headers
+    this.httpClient = axios.create({
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
+      }
+    });
   }
 
   /**
@@ -115,27 +126,43 @@ class YahooFinanceService {
       return priceMap;
     }
 
-    // Fetch all uncached symbols in a single batch API call
+    // Fetch all uncached symbols - try batch first, then individual
     try {
-      const quotes = await this.yahooFinance.quote(uncachedSymbols);
+      // Try batch API first
+      const batchPrices = await this._fetchBatchPricesFromYahoo(uncachedSymbols);
       
-      // Handle both single quote and array of quotes
-      const quotesArray = Array.isArray(quotes) ? quotes : [quotes];
+      for (const [symbol, price] of batchPrices) {
+        priceMap.set(symbol, price);
+        // Cache the result
+        const cacheKey = `yahoo:price:${symbol}`;
+        this.cacheService.set(cacheKey, price, this.cacheTTL);
+      }
       
-      for (const quote of quotesArray) {
-        if (quote && quote.symbol && quote.regularMarketPrice !== undefined) {
-          const price = quote.regularMarketPrice;
-          priceMap.set(quote.symbol, price);
-          
-          // Cache the result
-          const cacheKey = `yahoo:price:${quote.symbol}`;
-          this.cacheService.set(cacheKey, price, this.cacheTTL);
+      // Check if any symbols were missed in batch
+      const missedSymbols = uncachedSymbols.filter(s => !batchPrices.has(s));
+      
+      // Fetch missed symbols individually with delay
+      for (const symbol of missedSymbols) {
+        try {
+          await this._sleep(500); // 500ms delay between requests
+          const price = await this._fetchPriceFromYahoo(symbol);
+          if (price !== null) {
+            priceMap.set(symbol, price);
+            const cacheKey = `yahoo:price:${symbol}`;
+            this.cacheService.set(cacheKey, price, this.cacheTTL);
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch ${symbol}:`, err.message);
+          if (err.message?.includes('429') || err.message?.includes('Too Many Requests') || err.message?.includes('Rate limited')) {
+            this.lastRateLimitTime = Date.now();
+            break;
+          }
         }
       }
     } catch (error) {
       // Check if it's a rate limit error
       if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
-        console.warn('Rate limited by Yahoo Finance, backing off for 60 seconds');
+        console.warn('Rate limited by Yahoo Finance, backing off...');
         this.lastRateLimitTime = Date.now();
         return priceMap; // Return whatever we have cached
       }
@@ -146,14 +173,16 @@ class YahooFinanceService {
       // Add delay between individual requests to avoid rate limiting
       for (const symbol of uncachedSymbols) {
         try {
-          const price = await this.getCurrentPrice(symbol);
+          await this._sleep(1000); // 1 second delay between requests
+          const price = await this._fetchPriceFromYahoo(symbol);
           if (price !== null) {
             priceMap.set(symbol, price);
+            const cacheKey = `yahoo:price:${symbol}`;
+            this.cacheService.set(cacheKey, price, this.cacheTTL);
           }
-          // Small delay between requests
-          await this._sleep(100);
         } catch (err) {
-          if (err.message?.includes('429') || err.message?.includes('Too Many Requests')) {
+          console.warn(`Failed to fetch ${symbol}:`, err.message);
+          if (err.message?.includes('429') || err.message?.includes('Too Many Requests') || err.message?.includes('Rate limited')) {
             this.lastRateLimitTime = Date.now();
             break; // Stop making requests if rate limited
           }
@@ -199,22 +228,30 @@ class YahooFinanceService {
   }
 
   /**
-   * Fetch price from Yahoo Finance using yahoo-finance2 library
+   * Fetch price from Yahoo Finance using direct HTTP request
    * @private
    * @param {string} symbol - Stock symbol
    * @returns {Promise<number>} Current market price
    */
   async _fetchPriceFromYahoo(symbol) {
     try {
-      // Use yahoo-finance2 quote method
-      const quote = await this.yahooFinance.quote(symbol);
+      // Use Yahoo Finance chart API (more reliable than quote API)
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
       
-      if (!quote) {
+      const response = await this.httpClient.get(url);
+      
+      if (!response.data || !response.data.chart || !response.data.chart.result) {
         throw createYahooError(`No data returned for symbol: ${symbol}`, symbol);
       }
-
-      // Get the regular market price
-      const price = quote.regularMarketPrice;
+      
+      const result = response.data.chart.result[0];
+      
+      if (!result || !result.meta) {
+        throw createYahooError(`Invalid response for symbol: ${symbol}`, symbol);
+      }
+      
+      // Get the regular market price from meta
+      const price = result.meta.regularMarketPrice;
       
       if (price === undefined || price === null || isNaN(price)) {
         throw createYahooError(`Unable to get price for symbol: ${symbol}`, symbol);
@@ -226,9 +263,14 @@ class YahooFinanceService {
         throw error;
       }
       
-      // Handle yahoo-finance2 specific errors
-      if (error.message?.includes('Not Found') || error.message?.includes('no results')) {
-        throw createYahooError(`Symbol not found: ${symbol}`, symbol);
+      // Handle HTTP errors
+      if (error.response) {
+        if (error.response.status === 429) {
+          throw createYahooError(`Rate limited for ${symbol}`, symbol);
+        }
+        if (error.response.status === 404) {
+          throw createYahooError(`Symbol not found: ${symbol}`, symbol);
+        }
       }
       
       throw createYahooError(
@@ -236,6 +278,40 @@ class YahooFinanceService {
         symbol
       );
     }
+  }
+  
+  /**
+   * Fetch prices for multiple symbols using batch API
+   * @private
+   * @param {string[]} symbols - Array of stock symbols
+   * @returns {Promise<Map<string, number>>} Map of symbol to price
+   */
+  async _fetchBatchPricesFromYahoo(symbols) {
+    const priceMap = new Map();
+    
+    try {
+      // Use Yahoo Finance quote API for batch requests
+      const symbolsParam = symbols.join(',');
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`;
+      
+      const response = await this.httpClient.get(url);
+      
+      if (response.data && response.data.quoteResponse && response.data.quoteResponse.result) {
+        for (const quote of response.data.quoteResponse.result) {
+          if (quote && quote.symbol && quote.regularMarketPrice !== undefined) {
+            priceMap.set(quote.symbol, quote.regularMarketPrice);
+          }
+        }
+      }
+    } catch (error) {
+      // If batch fails, throw to trigger individual fetches
+      if (error.response?.status === 429) {
+        throw new Error('Too Many Requests');
+      }
+      throw error;
+    }
+    
+    return priceMap;
   }
 
   /**
