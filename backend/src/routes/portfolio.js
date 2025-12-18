@@ -23,7 +23,7 @@ let lastLoadTime = null;
 // Cache for enriched response to reduce API calls
 let cachedEnrichedResponse = null;
 let lastEnrichTime = null;
-const ENRICH_CACHE_TTL = 15000; // 15 seconds - matches frontend refresh interval
+const ENRICH_CACHE_TTL = 30000; // 30 seconds - increased to reduce Yahoo Finance calls
 
 /**
  * GET /api/portfolio
@@ -89,13 +89,16 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    // Cache the enriched response
-    cachedEnrichedResponse = {
-      holdings,
-      sectors,
-      errors: [...parseErrors, ...errors]
-    };
-    lastEnrichTime = now;
+    // Only cache if we have valid CMP data (at least one holding with CMP > 0)
+    const hasValidCMP = holdings.some(h => h.cmp > 0);
+    if (hasValidCMP) {
+      cachedEnrichedResponse = {
+        holdings,
+        sectors,
+        errors: [...parseErrors, ...errors]
+      };
+      lastEnrichTime = now;
+    }
 
     res.json({
       holdings,
@@ -124,9 +127,14 @@ router.get('/refresh', async (req, res, next) => {
       });
     }
 
-    // Clear caches
+    // Clear caches and reset rate limit
     yahooFinanceService.clearCache();
+    yahooFinanceService.lastRateLimitTime = 0; // Reset rate limit on manual refresh
     googleFinanceService.clearCache();
+    
+    // Clear response cache
+    cachedEnrichedResponse = null;
+    lastEnrichTime = null;
 
     // Force reload from Excel
     const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);

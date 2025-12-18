@@ -21,7 +21,7 @@ class YahooFinanceService {
     this.cacheTTL = options.cacheTTL || 30; // 30 seconds default (increased from 10)
     this.maxRetries = options.maxRetries || 1; // Reduced retries for faster loading
     this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
-    this.rateLimitBackoff = 60000; // 60 seconds backoff when rate limited
+    this.rateLimitBackoff = 30000; // 30 seconds backoff when rate limited (reduced from 60)
     this.lastRateLimitTime = 0;
     
     // Initialize yahoo-finance2 instance
