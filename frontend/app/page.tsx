@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { usePortfolio, useErrorHandler } from '@/hooks';
-import { SectorGroup, AutoRefresh, ErrorBoundary, useToast, LoadingBar, ThemeToggle, PortfolioCharts, MetricCard } from '@/components';
+import { SectorGroup, AutoRefresh, ErrorBoundary, useToast, LoadingBar, ThemeToggle, PortfolioCharts, MetricCard, LoadingScreen, SkeletonDashboard } from '@/components';
 import { parseApiErrors } from '@/utils';
 import { Briefcase, TrendingUp, Wallet, Percent } from 'lucide-react';
 import type { Holding, SectorSummary } from '@/types';
@@ -150,11 +150,25 @@ function ErrorState({
 function DashboardContent() {
   const { data, isLoading, error, isRefetching, refresh, lastUpdated } = usePortfolio();
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const { addToast } = useToast();
   const { handleError, isRetrying, retry, isOnline } = useErrorHandler({
     onRetry: refresh,
     showToasts: false,
   });
+
+  // Track when data loads for the first time
+  useEffect(() => {
+    if (data && !hasLoadedOnce) {
+      // Small delay to show completion animation
+      const timer = setTimeout(() => {
+        setHasLoadedOnce(true);
+        setShowLoadingScreen(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [data, hasLoadedOnce]);
 
   const handleToggleAutoRefresh = useCallback(() => {
     setAutoRefreshEnabled(prev => !prev);
@@ -196,9 +210,15 @@ function DashboardContent() {
     return Array.from(sectorGroups.keys()).sort((a, b) => a.localeCompare(b));
   }, [sectorGroups]);
 
+  // Show full-screen loading on initial load
+  const isInitialLoading = isLoading && !hasLoadedOnce;
+
   return (
     <div className="min-h-screen bg-background pb-10">
-      <LoadingBar isLoading={isLoading || isRefetching} variant={isRefetching ? 'success' : 'primary'} />
+      {/* Full-screen loading experience for initial load */}
+      <LoadingScreen isVisible={isInitialLoading && showLoadingScreen} />
+      
+      <LoadingBar isLoading={(isLoading || isRefetching) && !isInitialLoading} variant={isRefetching ? 'success' : 'primary'} />
 
       <div className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
 
@@ -276,22 +296,22 @@ function DashboardContent() {
         {/* Error State */}
         {error && <ErrorState error={error} onRetry={retry} isRetrying={isRetrying} />}
 
-        {/* Loading State */}
-        {isLoading && !error && (
-          <div className="animate-fade-in space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-24 sm:h-32 bg-card border border-border rounded-xl animate-pulse" />)}
-            </div>
-            <div className="h-48 sm:h-64 bg-card border border-border rounded-xl animate-pulse" />
-          </div>
+        {/* Loading State - Show skeleton after initial loading screen */}
+        {isLoading && !error && hasLoadedOnce && (
+          <SkeletonDashboard />
+        )}
+        
+        {/* Show skeleton during initial load if loading screen is dismissed */}
+        {isInitialLoading && !showLoadingScreen && !error && (
+          <SkeletonDashboard />
         )}
 
         {/* Main Content */}
         {!isLoading && !error && holdings && (
-          <div className="animate-in space-y-8">
+          <div className="animate-page-enter space-y-8">
 
             {/* Summary Metrics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 stagger-children">
               {(() => {
                 const totalInvestment = holdings.reduce((sum, h) => sum + h.investment, 0);
                 const totalPresentValue = holdings.reduce((sum, h) => sum + h.presentValue, 0);

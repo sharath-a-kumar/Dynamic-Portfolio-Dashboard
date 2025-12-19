@@ -40,10 +40,12 @@ export interface SectorSummary {
  * Error information from API calls
  */
 export interface ApiError {
-  source: 'yahoo' | 'google' | 'system';
+  source: 'yahoo' | 'google' | 'system' | 'excel';
   message: string;
   symbol?: string;
-  timestamp: Date;
+  timestamp?: Date;
+  row?: number; // For Excel parsing errors
+  error?: string; // Original error message
 }
 
 /**

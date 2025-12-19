@@ -9,7 +9,9 @@ const router = express.Router();
 // Initialize services
 const cacheService = new CacheService();
 const yahooFinanceService = new YahooFinanceService(cacheService, {
-  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 60 // 60 seconds default for cloud deployment
+  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 120, // 120 seconds default - reduced API calls
+  maxRetries: 2,
+  initialRetryDelay: 1000
 });
 const googleFinanceService = new GoogleFinanceService(cacheService, {
   cacheTTL: parseInt(process.env.CACHE_TTL_FINANCIALS) || 3600
@@ -23,7 +25,7 @@ let lastLoadTime = null;
 // Cache for enriched response to reduce API calls
 let cachedEnrichedResponse = null;
 let lastEnrichTime = null;
-const ENRICH_CACHE_TTL = 45000; // 45 seconds - increased to reduce Yahoo Finance calls on cloud
+const ENRICH_CACHE_TTL = 30000; // 30 seconds - balance between freshness and API limits
 
 /**
  * GET /api/portfolio
@@ -62,9 +64,19 @@ router.get('/', async (req, res, next) => {
     if (shouldReload) {
       const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);
       baseHoldings = result.holdings;
-      parseErrors = result.errors || [];
+      // Add source to parse errors so frontend can categorize them properly
+      parseErrors = (result.errors || []).map(err => ({
+        ...err,
+        source: 'excel',
+        message: err.error || err.message || 'Excel parsing error'
+      }));
       cachedPortfolioData = baseHoldings;
       lastLoadTime = now;
+      
+      // Log parse summary
+      if (result.invalidRows > 0) {
+        console.log(`Excel parsed: ${result.validRows} valid, ${result.invalidRows} invalid rows`);
+      }
     } else {
       baseHoldings = cachedPortfolioData;
     }
@@ -139,7 +151,12 @@ router.get('/refresh', async (req, res, next) => {
     // Force reload from Excel
     const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);
     const baseHoldings = result.holdings;
-    const parseErrors = result.errors || [];
+    // Add source to parse errors
+    const parseErrors = (result.errors || []).map(err => ({
+      ...err,
+      source: 'excel',
+      message: err.error || err.message || 'Excel parsing error'
+    }));
     
     cachedPortfolioData = baseHoldings;
     lastLoadTime = Date.now();

@@ -161,7 +161,16 @@ export function parseError(error: unknown): ParsedError {
  * Parse API errors from the backend response
  */
 export function parseApiErrors(errors: ApiError[]): ParsedError[] {
-  return errors.map((apiError) => {
+  // Filter out minor errors that shouldn't show as toasts
+  const significantErrors = errors.filter(err => {
+    // Skip individual row parsing errors - these are minor
+    if (err.source === 'excel' && err.row) {
+      return false;
+    }
+    return true;
+  });
+
+  return significantErrors.map((apiError) => {
     switch (apiError.source) {
       case 'yahoo':
         return {
@@ -182,6 +191,14 @@ export function parseApiErrors(errors: ApiError[]): ParsedError[] {
             : apiError.message,
           isRetryable: true,
           retryDelay: 5000,
+        };
+      case 'excel':
+        return {
+          source: 'system' as ErrorSource,
+          title: 'Data Warning',
+          message: apiError.message,
+          isRetryable: false,
+          retryDelay: 0,
         };
       default:
         return {

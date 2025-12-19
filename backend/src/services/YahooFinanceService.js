@@ -19,22 +19,21 @@ class YahooFinanceService {
    */
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
-    this.cacheTTL = options.cacheTTL || 60; // 60 seconds default (increased for cloud)
+    this.cacheTTL = options.cacheTTL || 120; // 120 seconds default - reduce API calls
     this.maxRetries = options.maxRetries || 2;
-    this.initialRetryDelay = options.initialRetryDelay || 2000; // 2 seconds
+    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
     this.rateLimitBackoff = 30000; // 30 seconds backoff when rate limited
     this.lastRateLimitTime = 0;
     
     // Create axios instance with browser-like headers
     this.httpClient = axios.create({
-      timeout: 15000,
+      timeout: 10000, // 10 seconds - faster timeout for individual requests
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept': 'application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache',
       }
     });
   }
@@ -84,7 +83,8 @@ class YahooFinanceService {
   }
 
   /**
-   * Get prices for multiple stock symbols in batch (single API call)
+   * Get prices for multiple stock symbols in batch
+   * Uses parallel requests with high concurrency since v7/quote API requires auth
    * @param {string[]} symbols - Array of stock symbols
    * @returns {Promise<Map<string, number>>} Map of symbol to price
    */
@@ -117,6 +117,7 @@ class YahooFinanceService {
 
     // If all symbols were cached, return immediately
     if (uncachedSymbols.length === 0) {
+      console.log(`All ${validSymbols.length} symbols served from cache`);
       return priceMap;
     }
 
@@ -126,9 +127,11 @@ class YahooFinanceService {
       return priceMap;
     }
 
-    // Fetch all uncached symbols - try batch first, then parallel individual
+    console.log(`Fetching ${uncachedSymbols.length} symbols (${priceMap.size} from cache)`);
+    const startTime = Date.now();
+
     try {
-      // Try batch API first (single request for all symbols)
+      // Fetch all uncached symbols in parallel with high concurrency
       const batchPrices = await this._fetchBatchPricesFromYahoo(uncachedSymbols);
       
       for (const [symbol, price] of batchPrices) {
@@ -137,38 +140,14 @@ class YahooFinanceService {
         this.cacheService.set(cacheKey, price, this.cacheTTL);
       }
       
-      // Check if any symbols were missed in batch
-      const missedSymbols = uncachedSymbols.filter(s => !batchPrices.has(s));
-      
-      // Fetch missed symbols in parallel (max 5 at a time)
-      if (missedSymbols.length > 0) {
-        const results = await this._fetchParallel(missedSymbols, 5);
-        for (const { symbol, price } of results) {
-          if (price !== null) {
-            priceMap.set(symbol, price);
-            const cacheKey = `yahoo:price:${symbol}`;
-            this.cacheService.set(cacheKey, price, this.cacheTTL);
-          }
-        }
-      }
+      console.log(`Fetched ${batchPrices.size} prices in ${Date.now() - startTime}ms`);
     } catch (error) {
       // Check if it's a rate limit error
       if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
         console.warn('Rate limited by Yahoo Finance, backing off...');
         this.lastRateLimitTime = Date.now();
-        return priceMap;
-      }
-      
-      // If batch fails, try parallel individual requests
-      console.warn('Batch quote failed, falling back to parallel requests:', error.message);
-      
-      const results = await this._fetchParallel(uncachedSymbols, 5);
-      for (const { symbol, price } of results) {
-        if (price !== null) {
-          priceMap.set(symbol, price);
-          const cacheKey = `yahoo:price:${symbol}`;
-          this.cacheService.set(cacheKey, price, this.cacheTTL);
-        }
+      } else {
+        console.error('Error fetching batch prices:', error.message);
       }
     }
 
@@ -263,7 +242,8 @@ class YahooFinanceService {
   }
   
   /**
-   * Fetch prices for multiple symbols using batch API
+   * Fetch prices for multiple symbols using chart API (more reliable than quote API)
+   * The v7/quote API now requires authentication, so we use v8/chart instead
    * @private
    * @param {string[]} symbols - Array of stock symbols
    * @returns {Promise<Map<string, number>>} Map of symbol to price
@@ -271,26 +251,14 @@ class YahooFinanceService {
   async _fetchBatchPricesFromYahoo(symbols) {
     const priceMap = new Map();
     
-    try {
-      // Use Yahoo Finance quote API for batch requests
-      const symbolsParam = symbols.join(',');
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`;
-      
-      const response = await this.httpClient.get(url);
-      
-      if (response.data && response.data.quoteResponse && response.data.quoteResponse.result) {
-        for (const quote of response.data.quoteResponse.result) {
-          if (quote && quote.symbol && quote.regularMarketPrice !== undefined) {
-            priceMap.set(quote.symbol, quote.regularMarketPrice);
-          }
-        }
+    // v8/chart API doesn't support true batch, so fetch in parallel with higher concurrency
+    // This is faster than sequential and more reliable than the v7/quote API
+    const results = await this._fetchParallel(symbols, 10); // Increased concurrency
+    
+    for (const { symbol, price } of results) {
+      if (price !== null) {
+        priceMap.set(symbol, price);
       }
-    } catch (error) {
-      // If batch fails, throw to trigger individual fetches
-      if (error.response?.status === 429) {
-        throw new Error('Too Many Requests');
-      }
-      throw error;
     }
     
     return priceMap;
@@ -303,7 +271,7 @@ class YahooFinanceService {
    * @param {number} concurrency - Max concurrent requests
    * @returns {Promise<Array<{symbol: string, price: number|null}>>}
    */
-  async _fetchParallel(symbols, concurrency = 5) {
+  async _fetchParallel(symbols, concurrency = 10) {
     const results = [];
     
     // Process in batches of 'concurrency' size
@@ -326,9 +294,9 @@ class YahooFinanceService {
       
       results.push(...batchResults);
       
-      // Small delay between batches to avoid rate limiting
+      // Minimal delay between batches - Yahoo's chart API is more tolerant
       if (i + concurrency < symbols.length) {
-        await this._sleep(200);
+        await this._sleep(50);
       }
     }
     
