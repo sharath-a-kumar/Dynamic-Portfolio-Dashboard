@@ -362,12 +362,22 @@ class PortfolioService {
     let financialMap = new Map();
     try {
       if (googleFinanceService) {
-        financialMap = await googleFinanceService.getBatchFinancials(symbols);
+        // Add a 5-second total timeout for Google Finance enrichment 
+        // to prevent slow scrapes from blocking the entire response
+        const enrichmentTimeout = 5000;
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Timeout after ${enrichmentTimeout}ms`)), enrichmentTimeout)
+        );
+        
+        financialMap = await Promise.race([
+          googleFinanceService.getBatchFinancials(symbols),
+          timeoutPromise
+        ]);
       }
     } catch (error) {
       errors.push({
         source: 'google',
-        message: `Failed to fetch financial metrics: ${error.message}`,
+        message: `Financial metrics fetch ${error.message.includes('Timeout') ? 'timed out' : 'failed'}. Using Excel data.`,
         timestamp: new Date()
       });
     }

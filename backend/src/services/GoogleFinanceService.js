@@ -21,15 +21,17 @@ class GoogleFinanceService {
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
     this.cacheTTL = options.cacheTTL || 3600; // 1 hour default
-    this.maxRetries = options.maxRetries || 3;
-    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
-    this.timeout = options.timeout || 5000; // 5 seconds
+    this.maxRetries = options.maxRetries || 1; // Faster fallback
+    this.initialRetryDelay = options.initialRetryDelay || 500; // 0.5 second
+    this.timeout = options.timeout || 3000; // 3 seconds
     
     // Rate limiting
     this.requestQueue = [];
     this.isProcessingQueue = false;
-    this.minRequestInterval = options.minRequestInterval || 100; // 100ms between requests
+    this.minRequestInterval = options.minRequestInterval || 50; // 50ms between starts
     this.lastRequestTime = 0;
+    this.maxConcurrent = options.maxConcurrent || 5; // Allow 5 concurrent requests
+    this.activeRequests = 0;
   }
 
   /**
@@ -430,13 +432,15 @@ class GoogleFinanceService {
    * @private
    */
   async _processQueue() {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
+    if (this.requestQueue.length === 0) {
       return;
     }
 
-    this.isProcessingQueue = true;
+    if (this.activeRequests >= this.maxConcurrent) {
+      return;
+    }
 
-    while (this.requestQueue.length > 0) {
+    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrent) {
       const now = Date.now();
       const timeSinceLastRequest = now - this.lastRequestTime;
       
@@ -447,16 +451,17 @@ class GoogleFinanceService {
 
       const { requestFn, resolve, reject } = this.requestQueue.shift();
       this.lastRequestTime = Date.now();
+      this.activeRequests++;
 
-      try {
-        const result = await requestFn();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
+      // Execute request without awaiting here to allow parallel processing
+      requestFn()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          this.activeRequests--;
+          this._processQueue(); // Check for more work
+        });
     }
-
-    this.isProcessingQueue = false;
   }
 
   /**
