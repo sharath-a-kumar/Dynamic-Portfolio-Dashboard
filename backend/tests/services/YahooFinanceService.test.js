@@ -1,5 +1,5 @@
-import YahooFinanceService from './YahooFinanceService.js';
-import CacheService from './CacheService.js';
+import YahooFinanceService from '../../src/services/YahooFinanceService.js';
+import CacheService from '../../src/services/CacheService.js';
 
 describe('YahooFinanceService', () => {
   let cacheService;
@@ -23,8 +23,8 @@ describe('YahooFinanceService', () => {
   describe('Constructor and Configuration', () => {
     test('should create service with default options', () => {
       const service = new YahooFinanceService(cacheService);
-      expect(service.cacheTTL).toBe(10);
-      expect(service.maxRetries).toBe(3);
+      expect(service.cacheTTL).toBe(120);
+      expect(service.maxRetries).toBe(2);
       expect(service.initialRetryDelay).toBe(1000);
     });
 

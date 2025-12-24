@@ -7,7 +7,7 @@ const BSE_TO_NSE_MAP = {
   // Financial Sector
   '532174': 'ICICIBANK',    // ICICI Bank
   '544252': 'BAJAJHFL',     // Bajaj Housing Finance
-  '511577': 'SAVANIFIN',    // Savani Financials (may not be on NSE)
+  // '511577': 'SAVANIFIN',    // Savani Financials (Not listed on NSE, fallback to .BO)
   '540719': 'SBILIFE',      // SBI Life
   
   // Tech Sector

@@ -46,14 +46,29 @@ class PortfolioService {
       // Row 1+: Either sector headers or stock data
       const headerRow = rawRows[0];
       
-      // Build column mapping from __EMPTY_X to actual column names
-      const columnMap = {};
-      Object.keys(headerRow).forEach(key => {
-        const value = headerRow[key];
-        if (value && typeof value === 'string') {
-          columnMap[key] = value.trim();
-        }
-      });
+      // Build column mapping from headerRow
+      // Find the best mapping for each required column
+      const findKey = (possibleNames) => {
+        return Object.keys(headerRow).find(key => {
+          const val = headerRow[key];
+          return val && typeof val === 'string' && possibleNames.some(name => 
+            val.toLowerCase().includes(name.toLowerCase())
+          );
+        });
+      };
+
+      const keys = {
+        number: findKey(['No', 'S.No']),
+        particulars: findKey(['Particulars', 'Name']),
+        purchasePrice: findKey(['Purchase Price', 'Buy Price']),
+        quantity: findKey(['Qty', 'Quantity']),
+        stockCode: findKey(['NSE/BSE', 'Code', 'Symbol']),
+        pe: findKey(['P/E', 'PE Ratio']),
+        earnings: findKey(['Latest Earnings', 'Earnings']),
+        sector: findKey(['Sector', 'Category'])
+      };
+
+      console.log('Detected Excel Column Mapping:', keys);
       
       const errors = [];
       const holdings = [];
@@ -63,81 +78,79 @@ class PortfolioService {
       for (let i = 1; i < rawRows.length; i++) {
         const row = rawRows[i];
         
+        // Particulars is required for both sector and stock rows
+        const particularsValue = row[keys.particulars];
+        if (!particularsValue || typeof particularsValue !== 'string') continue;
+
         // Check if this is a sector header row
-        // Sector rows typically have only the name in __EMPTY_1 and summary data
-        const particularsValue = row['__EMPTY_1'];
-        const hasStockNumber = row['__EMPTY'] !== undefined && typeof row['__EMPTY'] === 'number';
-        const stockCode = row['__EMPTY_6'];
+        const hasStockNumber = row[keys.number] !== undefined && typeof row[keys.number] === 'number';
+        const stockCode = row[keys.stockCode];
         const hasStockCode = stockCode !== undefined && stockCode !== null && stockCode !== '';
         
-        if (particularsValue && typeof particularsValue === 'string') {
-          // Check if this looks like a sector header (no stock number, no stock code)
-          if (!hasStockNumber && !hasStockCode && particularsValue.includes('Sector')) {
-            currentSector = particularsValue.replace(/\s*Sector\s*/i, '').trim();
-            continue; // Skip to next row
+        // Sector rows typically have only the name and includes "Sector" or no stock number/code
+        if (!hasStockNumber && !hasStockCode && (particularsValue.includes('Sector') || particularsValue.includes('Total'))) {
+          currentSector = particularsValue.replace(/\s*Sector\s*/i, '').replace(/Total/i, '').trim();
+          continue; 
+        }
+        
+        // This is a stock row - parse it
+        try {
+          const purchasePriceValue = row[keys.purchasePrice];
+          const quantityValue = row[keys.quantity];
+          
+          // Validate required fields
+          if (purchasePriceValue === undefined || quantityValue === undefined || !hasStockCode) {
+            continue;
           }
           
-          // This is a stock row - parse it
-          try {
-            const purchasePrice = row['__EMPTY_2'];
-            const quantity = row['__EMPTY_3'];
-            
-            // Validate required fields
-            if (!particularsValue || purchasePrice === undefined || quantity === undefined || !hasStockCode) {
-              errors.push({
-                row: i + 1,
-                error: 'Missing required fields (Particulars, Purchase Price, Qty, or NSE/BSE)'
-              });
-              continue;
+          // Parse NSE/BSE codes
+          const [nse, bse] = this._parseNseBseCodes(stockCode);
+          
+          // Extract P/E ratio and Latest Earnings
+          const peRatioValue = row[keys.pe];
+          const latestEarningsValue = row[keys.earnings];
+          
+          // Parse P/E ratio (can be number, string like "#N/A", or empty)
+          let peRatio = null;
+          if (peRatioValue !== undefined && peRatioValue !== null && peRatioValue !== '') {
+            const parsed = Number(peRatioValue);
+            if (!isNaN(parsed) && parsed > 0) {
+              peRatio = parsed;
+            } else {
+              // Might be string like "#N/A" or "-"
+              // console.debug(`Non-numeric PE for ${particularsValue}: ${peRatioValue}`);
             }
-            
-            // Parse NSE/BSE codes (can be string NSE code or numeric BSE code)
-            const [nse, bse] = this._parseNseBseCodes(stockCode);
-            
-            // Extract P/E ratio and Latest Earnings from Excel if available
-            const peRatioValue = row['__EMPTY_12'];
-            const latestEarningsValue = row['__EMPTY_13'];
-            
-            // Parse P/E ratio (can be number or string)
-            let peRatio = null;
-            if (peRatioValue !== undefined && peRatioValue !== null && peRatioValue !== '') {
-              const parsed = Number(peRatioValue);
-              if (!isNaN(parsed) && parsed !== 0) {
-                peRatio = parsed;
-              }
-            }
-            
-            // Parse Latest Earnings (can be number or string)
-            let latestEarnings = null;
-            if (latestEarningsValue !== undefined && latestEarningsValue !== null && latestEarningsValue !== '') {
-              // Convert to string and trim
-              latestEarnings = String(latestEarningsValue).trim();
-            }
-            
-            // Create holding
-            const holding = createHolding({
-              particulars: particularsValue.trim(),
-              purchasePrice: Number(purchasePrice) || 0,
-              quantity: Number(quantity) || 0,
-              nseCode: nse,
-              bseCode: bse,
-              sector: currentSector,
-              cmp: 0, // Will be fetched from Yahoo Finance
-              peRatio: peRatio, // Read from Excel
-              latestEarnings: latestEarnings // Read from Excel
-            });
-            
-            holdings.push(holding);
-            
-          } catch (error) {
-            errors.push({
-              row: i + 1,
-              error: `Failed to create holding: ${error.message}`
-            });
           }
+          
+          let latestEarnings = null;
+          if (latestEarningsValue !== undefined && latestEarningsValue !== null && latestEarningsValue !== '' && latestEarningsValue !== '#N/A') {
+            latestEarnings = String(latestEarningsValue).trim();
+          }
+          
+          // Create holding
+          const holding = createHolding({
+            particulars: particularsValue.trim(),
+            purchasePrice: Number(purchasePriceValue) || 0,
+            quantity: Number(quantityValue) || 0,
+            nseCode: nse,
+            bseCode: bse,
+            sector: currentSector,
+            cmp: 0,
+            peRatio: peRatio,
+            latestEarnings: latestEarnings
+          });
+          
+          holdings.push(holding);
+          
+        } catch (error) {
+          errors.push({
+            row: i + 1,
+            error: `Failed to create holding for ${particularsValue}: ${error.message}`
+          });
         }
       }
       
+      console.log(`Successfully loaded ${holdings.length} holdings in ${new Set(holdings.map(h => h.sector)).size} sectors`);
       return {
         holdings,
         errors,
@@ -345,15 +358,16 @@ class PortfolioService {
       });
     }
 
-    // Skip Google Finance for now - data is in Excel
-    const financialMap = new Map();
-    
-    // Note: Google Finance fetching is disabled for faster loading
-    // P/E ratio and earnings are read from Excel file instead
-    if (false && googleFinanceService) { // Disabled
+    // Fetch financial metrics from Google Finance (P/E ratio, earnings)
+    let financialMap = new Map();
+    try {
+      if (googleFinanceService) {
+        financialMap = await googleFinanceService.getBatchFinancials(symbols);
+      }
+    } catch (error) {
       errors.push({
         source: 'google',
-        message: `Failed to fetch financial metrics: ${financialResults.reason.message}`,
+        message: `Failed to fetch financial metrics: ${error.message}`,
         timestamp: new Date()
       });
     }
@@ -368,8 +382,8 @@ class PortfolioService {
       // Get financial metrics from Google Finance (if available)
       // Otherwise, preserve the values already read from Excel
       const financialData = financialMap.get(yahooSymbol);
-      const peRatio = financialData?.peRatio ?? holding.peRatio;
-      const latestEarnings = financialData?.latestEarnings ?? holding.latestEarnings;
+      const peRatio = (financialData && financialData.peRatio) ? financialData.peRatio : (holding.peRatio || null);
+      const latestEarnings = (financialData && financialData.latestEarnings) ? financialData.latestEarnings : (holding.latestEarnings || null);
 
       // If CMP is available, calculate all metrics
       if (cmp !== undefined && cmp !== null) {
@@ -381,9 +395,14 @@ class PortfolioService {
         
         return enrichedHolding;
       } else {
-        // CMP not available - silently skip
-        // Small-cap stocks may not be available on Yahoo Finance
-        // Return holding with financial metrics but no CMP updates
+        // CMP not available - skip calculation but report error
+        errors.push({
+          source: 'yahoo',
+          symbol: yahooSymbol,
+          message: `Missing CMP for ${holding.particulars}`,
+          timestamp: new Date()
+        });
+
         return {
           ...holding,
           peRatio,

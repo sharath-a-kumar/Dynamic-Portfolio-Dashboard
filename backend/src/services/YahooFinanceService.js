@@ -19,15 +19,20 @@ class YahooFinanceService {
    */
   constructor(cacheService, options = {}) {
     this.cacheService = cacheService;
-    this.cacheTTL = options.cacheTTL || 120; // 120 seconds default - reduce API calls
+    this.cacheTTL = options.cacheTTL || 120;
     this.maxRetries = options.maxRetries || 2;
-    this.initialRetryDelay = options.initialRetryDelay || 1000; // 1 second
-    this.rateLimitBackoff = 30000; // 30 seconds backoff when rate limited
+    this.initialRetryDelay = options.initialRetryDelay || 1000;
+    this.timeout = options.timeout || 10000;
+    this.minRequestInterval = options.minRequestInterval || 100;
+    this.rateLimitBackoff = options.rateLimitBackoff || 30000;
     this.lastRateLimitTime = 0;
+    this.lastRequestTime = 0;
+    this.requestQueue = [];
+    this.isProcessingQueue = false;
     
     // Create axios instance with browser-like headers
     this.httpClient = axios.create({
-      timeout: 10000, // 10 seconds - faster timeout for individual requests
+      timeout: this.timeout,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -332,7 +337,9 @@ class YahooFinanceService {
   getStats() {
     const cacheStats = this.cacheService.getStats();
     return {
-      cache: cacheStats
+      cache: cacheStats,
+      queueLength: (this.requestQueue || []).length,
+      isProcessingQueue: !!this.isProcessingQueue
     };
   }
 }

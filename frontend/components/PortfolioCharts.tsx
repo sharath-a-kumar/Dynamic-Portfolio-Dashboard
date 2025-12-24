@@ -178,10 +178,10 @@ export function PortfolioCharts({ holdings }: PortfolioChartsProps) {
   const peDistribution = useMemo(() => {
     const withPE = holdings.filter((h) => h.peRatio !== null && h.peRatio > 0);
     const ranges = [
-      { range: '0-15', min: 0, max: 15, count: 0, label: 'Value' },
-      { range: '15-25', min: 15, max: 25, count: 0, label: 'Fair' },
-      { range: '25-40', min: 25, max: 40, count: 0, label: 'Growth' },
-      { range: '40+', min: 40, max: Infinity, count: 0, label: 'Premium' },
+      { range: '0-15', min: 0, max: 15, count: 0, label: 'Value (<15)' },
+      { range: '15-25', min: 15, max: 25, count: 0, label: 'Fair (15-25)' },
+      { range: '25-40', min: 25, max: 40, count: 0, label: 'Growth (25-40)' },
+      { range: '40+', min: 40, max: Infinity, count: 0, label: 'Premium (>40)' },
     ];
 
     withPE.forEach((h) => {
@@ -198,7 +198,7 @@ export function PortfolioCharts({ holdings }: PortfolioChartsProps) {
       name: r.range,
       label: r.label,
       value: r.count,
-      fill: COLORS[i],
+      fill: COLORS[i + 3] || COLORS[i], // Use different color set
     }));
   }, [holdings]);
 

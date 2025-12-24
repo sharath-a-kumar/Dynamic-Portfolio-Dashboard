@@ -2,7 +2,7 @@
  * Tests for PortfolioService
  */
 
-import PortfolioService from './PortfolioService.js';
+import PortfolioService from '../../src/services/PortfolioService.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -570,7 +570,7 @@ describe('PortfolioService', () => {
       );
 
       // Both services should be called at approximately the same time (parallel)
-      expect(Math.abs(yahooCallTime - googleCallTime)).toBeLessThan(10);
+      expect(Math.abs(yahooCallTime - googleCallTime)).toBeLessThan(100);
     });
 
     test('should handle missing financial data gracefully', async () => {

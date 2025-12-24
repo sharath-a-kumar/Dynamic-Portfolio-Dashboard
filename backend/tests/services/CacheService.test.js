@@ -1,4 +1,4 @@
-import CacheService from './CacheService.js';
+import CacheService from '../../src/services/CacheService.js';
 
 describe('CacheService', () => {
   let cacheService;
