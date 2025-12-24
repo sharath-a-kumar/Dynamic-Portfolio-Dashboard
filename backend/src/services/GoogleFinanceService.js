@@ -432,7 +432,7 @@ class GoogleFinanceService {
    * @private
    */
   async _processQueue() {
-    if (this.requestQueue.length === 0) {
+    if (this.isProcessingQueue || this.requestQueue.length === 0) {
       return;
     }
 
@@ -440,27 +440,40 @@ class GoogleFinanceService {
       return;
     }
 
-    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrent) {
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
-      
-      // Wait if we need to respect rate limit
-      if (timeSinceLastRequest < this.minRequestInterval) {
-        await this._sleep(this.minRequestInterval - timeSinceLastRequest);
+    this.isProcessingQueue = true;
+
+    try {
+      while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrent) {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        
+        // Wait if we need to respect rate limit
+        if (timeSinceLastRequest < this.minRequestInterval) {
+          await this._sleep(this.minRequestInterval - timeSinceLastRequest);
+          // Re-check length and concurrency after sleep in case others finished
+          if (this.requestQueue.length === 0 || this.activeRequests >= this.maxConcurrent) {
+            break;
+          }
+        }
+
+        const item = this.requestQueue.shift();
+        if (!item) break; // Final safety check
+
+        const { requestFn, resolve, reject } = item;
+        this.lastRequestTime = Date.now();
+        this.activeRequests++;
+
+        // Execute request without awaiting here to allow parallel processing
+        requestFn()
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            this.activeRequests--;
+            this._processQueue(); // Check for more work when this one finishes
+          });
       }
-
-      const { requestFn, resolve, reject } = this.requestQueue.shift();
-      this.lastRequestTime = Date.now();
-      this.activeRequests++;
-
-      // Execute request without awaiting here to allow parallel processing
-      requestFn()
-        .then(resolve)
-        .catch(reject)
-        .finally(() => {
-          this.activeRequests--;
-          this._processQueue(); // Check for more work
-        });
+    } finally {
+      this.isProcessingQueue = false;
     }
   }
 
