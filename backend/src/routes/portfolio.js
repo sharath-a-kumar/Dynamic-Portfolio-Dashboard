@@ -1,7 +1,6 @@
 import express from 'express';
 import PortfolioService from '../services/PortfolioService.js';
 import YahooFinanceService from '../services/YahooFinanceService.js';
-import GoogleFinanceService from '../services/GoogleFinanceService.js';
 import CacheService from '../services/CacheService.js';
 
 const router = express.Router();
@@ -9,13 +8,13 @@ const router = express.Router();
 // Initialize services
 const cacheService = new CacheService();
 const yahooFinanceService = new YahooFinanceService(cacheService, {
-  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 120, // 120 seconds default - reduced API calls
+  cacheTTL: parseInt(process.env.CACHE_TTL_CMP) || 300, // 5 minutes - stock prices don't change that fast
   maxRetries: 2,
   initialRetryDelay: 1000
 });
-const googleFinanceService = new GoogleFinanceService(cacheService, {
-  cacheTTL: parseInt(process.env.CACHE_TTL_FINANCIALS) || 3600
-});
+// Google Finance scraping disabled - unreliable and slow
+// P/E and Earnings data comes from Excel file instead
+const googleFinanceService = null;
 const portfolioService = new PortfolioService();
 
 // Store portfolio data in memory (could be moved to a database later)
@@ -25,11 +24,82 @@ let lastLoadTime = null;
 // Cache for enriched response to reduce API calls
 let cachedEnrichedResponse = null;
 let lastEnrichTime = null;
-const ENRICH_CACHE_TTL = 30000; // 30 seconds - balance between freshness and API limits
+const ENRICH_CACHE_TTL = 60000; // 60 seconds - better caching for faster responses
+
+// Background refresh state
+let isBackgroundRefreshing = false;
+
+/**
+ * Background refresh function - updates cache without blocking response
+ */
+async function refreshInBackground(excelFilePath) {
+  if (isBackgroundRefreshing) return;
+  
+  isBackgroundRefreshing = true;
+  try {
+    const now = Date.now();
+    
+    // Check if Excel needs reloading
+    const shouldReload = !cachedPortfolioData || 
+                        !lastLoadTime || 
+                        (now - lastLoadTime > 5 * 60 * 1000);
+
+    let baseHoldings = cachedPortfolioData;
+    let parseErrors = [];
+
+    if (shouldReload) {
+      const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);
+      baseHoldings = result.holdings;
+      parseErrors = (result.errors || []).map(err => ({
+        ...err,
+        source: 'excel',
+        message: err.error || err.message || 'Excel parsing error'
+      }));
+      cachedPortfolioData = baseHoldings;
+      lastLoadTime = now;
+    }
+
+    // Enrich with live data (Google Finance disabled - uses Excel P/E and Earnings)
+    const { holdings, errors } = await portfolioService.enrichWithLiveData(
+      baseHoldings,
+      yahooFinanceService,
+      null // Google Finance disabled
+    );
+
+    // Group by sector
+    const sectorMap = portfolioService.groupBySector(holdings);
+    const sectors = [];
+
+    for (const [sectorName, sectorHoldings] of sectorMap) {
+      const summary = portfolioService.calculateSectorSummary(sectorHoldings, sectorName);
+      sectors.push({
+        sector: sectorName,
+        holdings: sectorHoldings,
+        summary
+      });
+    }
+
+    // Update cache
+    const hasValidCMP = holdings.some(h => h.cmp > 0);
+    if (hasValidCMP) {
+      cachedEnrichedResponse = {
+        holdings,
+        sectors,
+        errors: [...parseErrors, ...errors]
+      };
+      lastEnrichTime = Date.now();
+    }
+  } catch (error) {
+    console.error('Background refresh failed:', error.message);
+  } finally {
+    isBackgroundRefreshing = false;
+  }
+}
 
 /**
  * GET /api/portfolio
  * Fetch complete portfolio data with live prices
+ * Uses stale-while-revalidate pattern for fast responses
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -42,18 +112,39 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    // Check if we have a recent cached response (within 15 seconds)
     const now = Date.now();
-    if (cachedEnrichedResponse && lastEnrichTime && (now - lastEnrichTime < ENRICH_CACHE_TTL)) {
-      // Return cached response with updated timestamp
-      return res.json({
-        ...cachedEnrichedResponse,
-        lastUpdated: new Date().toISOString(),
-        cached: true
-      });
+    
+    // Stale-while-revalidate: Return cached data immediately if available
+    // Then trigger background refresh if cache is getting stale
+    if (cachedEnrichedResponse && lastEnrichTime) {
+      const cacheAge = now - lastEnrichTime;
+      
+      // If cache is fresh (< 60s), return it directly
+      if (cacheAge < ENRICH_CACHE_TTL) {
+        return res.json({
+          ...cachedEnrichedResponse,
+          lastUpdated: new Date(lastEnrichTime).toISOString(),
+          cached: true,
+          cacheAge: Math.round(cacheAge / 1000)
+        });
+      }
+      
+      // If cache is stale but exists (< 5 min), return it and refresh in background
+      if (cacheAge < 5 * 60 * 1000) {
+        // Trigger background refresh (non-blocking)
+        refreshInBackground(excelFilePath);
+        
+        return res.json({
+          ...cachedEnrichedResponse,
+          lastUpdated: new Date(lastEnrichTime).toISOString(),
+          cached: true,
+          stale: true,
+          cacheAge: Math.round(cacheAge / 1000)
+        });
+      }
     }
 
-    // Load portfolio from Excel if not cached or if it's been more than 5 minutes
+    // No cache or cache too old - do a fresh fetch
     const shouldReload = !cachedPortfolioData || 
                         !lastLoadTime || 
                         (now - lastLoadTime > 5 * 60 * 1000);
@@ -64,7 +155,6 @@ router.get('/', async (req, res, next) => {
     if (shouldReload) {
       const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);
       baseHoldings = result.holdings;
-      // Add source to parse errors so frontend can categorize them properly
       parseErrors = (result.errors || []).map(err => ({
         ...err,
         source: 'excel',
@@ -73,7 +163,6 @@ router.get('/', async (req, res, next) => {
       cachedPortfolioData = baseHoldings;
       lastLoadTime = now;
       
-      // Log parse summary
       if (result.invalidRows > 0) {
         console.log(`Excel parsed: ${result.validRows} valid, ${result.invalidRows} invalid rows`);
       }
@@ -81,11 +170,11 @@ router.get('/', async (req, res, next) => {
       baseHoldings = cachedPortfolioData;
     }
 
-    // Enrich with live data
+    // Enrich with live data (Google Finance disabled - uses Excel P/E and Earnings)
     const { holdings, errors } = await portfolioService.enrichWithLiveData(
       baseHoldings,
       yahooFinanceService,
-      googleFinanceService
+      null // Google Finance disabled for faster loading
     );
 
     // Group by sector for response
@@ -101,7 +190,7 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    // Only cache if we have valid CMP data (at least one holding with CMP > 0)
+    // Cache the response
     const hasValidCMP = holdings.some(h => h.cmp > 0);
     if (hasValidCMP) {
       cachedEnrichedResponse = {
@@ -142,7 +231,6 @@ router.get('/refresh', async (req, res, next) => {
     // Clear caches and reset rate limit
     yahooFinanceService.clearCache();
     yahooFinanceService.lastRateLimitTime = 0; // Reset rate limit on manual refresh
-    googleFinanceService.clearCache();
     
     // Clear response cache
     cachedEnrichedResponse = null;
@@ -151,7 +239,6 @@ router.get('/refresh', async (req, res, next) => {
     // Force reload from Excel
     const result = await portfolioService.loadPortfolioFromExcel(excelFilePath);
     const baseHoldings = result.holdings;
-    // Add source to parse errors
     const parseErrors = (result.errors || []).map(err => ({
       ...err,
       source: 'excel',
@@ -161,11 +248,11 @@ router.get('/refresh', async (req, res, next) => {
     cachedPortfolioData = baseHoldings;
     lastLoadTime = Date.now();
 
-    // Enrich with live data
+    // Enrich with live data (Google Finance disabled)
     const { holdings, errors } = await portfolioService.enrichWithLiveData(
       baseHoldings,
       yahooFinanceService,
-      googleFinanceService
+      null // Google Finance disabled for faster loading
     );
 
     // Group by sector for response
@@ -179,6 +266,17 @@ router.get('/refresh', async (req, res, next) => {
         holdings: sectorHoldings,
         summary
       });
+    }
+
+    // Update cache
+    const hasValidCMP = holdings.some(h => h.cmp > 0);
+    if (hasValidCMP) {
+      cachedEnrichedResponse = {
+        holdings,
+        sectors,
+        errors: [...parseErrors, ...errors]
+      };
+      lastEnrichTime = Date.now();
     }
 
     res.json({

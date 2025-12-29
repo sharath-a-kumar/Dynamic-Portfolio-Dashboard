@@ -304,13 +304,12 @@ class PortfolioService {
   }
 
   /**
-   * Enriches portfolio holdings with live data from Yahoo Finance and Google Finance
-   * Orchestrates parallel fetching of CMP and financial metrics
-   * Handles partial failures gracefully and returns available data
+   * Enriches portfolio holdings with live data from Yahoo Finance
+   * P/E ratio and earnings data comes from Excel file (Google Finance disabled for performance)
    * 
    * @param {Array} holdings - Array of holding objects to enrich
    * @param {Object} yahooFinanceService - Yahoo Finance service instance
-   * @param {Object} googleFinanceService - Google Finance service instance
+   * @param {Object} googleFinanceService - Google Finance service instance (pass null to skip)
    * @returns {Promise<Object>} Object containing enriched holdings and any errors
    */
   async enrichWithLiveData(holdings, yahooFinanceService, googleFinanceService) {
@@ -348,8 +347,8 @@ class PortfolioService {
 
     const symbols = Array.from(symbolMap.values());
 
-    // Fetch CMP data from Yahoo Finance (skip Google Finance for faster loading)
-    // P/E ratio and earnings data is already in the Excel file
+    // Fetch CMP data from Yahoo Finance only
+    // P/E ratio and earnings data comes from Excel file (faster and more reliable)
     let cmpMap = new Map();
     
     try {
@@ -362,48 +361,23 @@ class PortfolioService {
       });
     }
 
-    // Fetch financial metrics from Google Finance (P/E ratio, earnings)
-    let financialMap = new Map();
-    try {
-      if (googleFinanceService) {
-        // Add a 5-second total timeout for Google Finance enrichment 
-        // to prevent slow scrapes from blocking the entire response
-        const enrichmentTimeout = 5000;
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Timeout after ${enrichmentTimeout}ms`)), enrichmentTimeout)
-        );
-        
-        financialMap = await Promise.race([
-          googleFinanceService.getBatchFinancials(symbols),
-          timeoutPromise
-        ]);
-      }
-    } catch (error) {
-      errors.push({
-        source: 'google',
-        message: `Financial metrics fetch ${error.message.includes('Timeout') ? 'timed out' : 'failed'}. Using Excel data.`,
-        timestamp: new Date()
-      });
-    }
-
-    // Enrich each holding with live data
+    // Enrich each holding with live CMP data
+    // P/E and earnings are preserved from Excel parsing
     const enrichedHoldings = holdings.map(holding => {
       const yahooSymbol = symbolMap.get(holding.id);
       
       // Get CMP from Yahoo Finance
       const cmp = cmpMap.get(yahooSymbol);
       
-      // Get financial metrics from Google Finance (if available)
-      // Otherwise, preserve the values already read from Excel
-      const financialData = financialMap.get(yahooSymbol);
-      const peRatio = (financialData && financialData.peRatio) ? financialData.peRatio : (holding.peRatio || null);
-      const latestEarnings = (financialData && financialData.latestEarnings) ? financialData.latestEarnings : (holding.latestEarnings || null);
+      // Preserve P/E and earnings from Excel (already parsed in loadPortfolioFromExcel)
+      const peRatio = holding.peRatio || null;
+      const latestEarnings = holding.latestEarnings || null;
 
       // If CMP is available, calculate all metrics
       if (cmp !== undefined && cmp !== null) {
         const enrichedHolding = this.calculateMetrics(holding, cmp);
         
-        // Add financial metrics (preserve Excel values if Google Finance not available)
+        // Preserve financial metrics from Excel
         enrichedHolding.peRatio = peRatio;
         enrichedHolding.latestEarnings = latestEarnings;
         

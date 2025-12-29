@@ -10,7 +10,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 120 seconds timeout (Yahoo/Google Finance scraping can be slow)
+  timeout: 30000, // 30 seconds - backend is now much faster without Google Finance scraping
   headers: {
     'Content-Type': 'application/json',
   },

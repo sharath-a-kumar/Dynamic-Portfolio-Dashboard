@@ -17,7 +17,7 @@ import { fetchPortfolio, refreshPortfolio } from '@/lib/api';
 import type { PortfolioResponse } from '@/types';
 
 const PORTFOLIO_QUERY_KEY = ['portfolio'];
-const REFETCH_INTERVAL = 15000; // 15 seconds in milliseconds
+const REFETCH_INTERVAL = 30000; // 30 seconds - backend caches for 60s, so 30s is a good balance
 
 export interface UsePortfolioOptions {
   /**
@@ -114,7 +114,7 @@ export function usePortfolio(options: UsePortfolioOptions = {}): UsePortfolioRet
     enabled,
     refetchInterval: enabled ? refetchInterval : false,
     refetchIntervalInBackground: false, // Pause when tab is not visible
-    staleTime: 10000, // Consider data stale after 10 seconds
+    staleTime: 30000, // Consider data stale after 30 seconds (backend caches for 60s)
     gcTime: 5 * 60 * 1000, // Keep unused data in cache for 5 minutes
     retry: 3, // Retry failed requests 3 times
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff

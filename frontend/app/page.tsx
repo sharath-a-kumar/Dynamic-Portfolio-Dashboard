@@ -243,7 +243,7 @@ function DashboardContent() {
               <div className="flex items-center px-2 sm:px-3 py-1.5 border-r border-border">
                 <span className={`w-2 h-2 rounded-full mr-2 ${autoRefreshEnabled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-muted-foreground'}`}></span>
                 <span className="text-xs font-medium text-muted-foreground hidden md:block">
-                  <AutoRefresh interval={15000} onRefresh={handleManualRefresh} enabled={autoRefreshEnabled} showIndicator={true} />
+                  <AutoRefresh interval={30000} onRefresh={handleManualRefresh} enabled={autoRefreshEnabled} showIndicator={true} />
                 </span>
               </div>
               <button
@@ -390,7 +390,7 @@ function DashboardContent() {
               <p>
                 Showing <span className="font-medium text-foreground">{data?.holdings.length ?? 0}</span> holdings across <span className="font-medium text-foreground">{sortedSectors.length}</span> sectors
               </p>
-              <p className="text-xs">Market Data deferred by 15 mins</p>
+              <p className="text-xs">Market data updates every 30 seconds</p>
             </div>
           </div>
         )}
