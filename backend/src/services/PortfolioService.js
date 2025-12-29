@@ -87,8 +87,12 @@ class PortfolioService {
         const stockCode = row[keys.stockCode];
         const hasStockCode = stockCode !== undefined && stockCode !== null && stockCode !== '';
         
-        // Sector rows typically have only the name and includes "Sector" or no stock number/code
-        if (!hasStockNumber && !hasStockCode && (particularsValue.includes('Sector') || particularsValue.includes('Total'))) {
+        // Sector rows typically have only the name and no stock number/code
+        if (!hasStockNumber && !hasStockCode && particularsValue.length > 3) {
+          // Skip if it's just the table header row
+          if (particularsValue.toLowerCase() === 'particulars') continue;
+          
+          // Clean up the sector name (remove "Total" if it's a sub-total row we want to use as a header)
           currentSector = particularsValue.replace(/\s*Sector\s*/i, '').replace(/Total/i, '').trim();
           continue; 
         }
