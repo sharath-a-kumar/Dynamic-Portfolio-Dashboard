@@ -148,7 +148,8 @@ function ErrorState({
 }
 
 function DashboardContent() {
-  const { data, isLoading, error, isRefetching, refresh, lastUpdated } = usePortfolio();
+  // Disable internal polling in favor of the AutoRefresh component which handles the timer and visual countdown
+  const { data, isLoading, error, isRefetching, refresh, lastUpdated } = usePortfolio({ refetchInterval: false });
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -217,7 +218,7 @@ function DashboardContent() {
     <div className="min-h-screen bg-background pb-10">
       {/* Full-screen loading experience for initial load */}
       <LoadingScreen isVisible={isInitialLoading && showLoadingScreen} />
-      
+
       <LoadingBar isLoading={(isLoading || isRefetching) && !isInitialLoading} variant={isRefetching ? 'success' : 'primary'} />
 
       <div className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
@@ -300,7 +301,7 @@ function DashboardContent() {
         {isLoading && !error && hasLoadedOnce && (
           <SkeletonDashboard />
         )}
-        
+
         {/* Show skeleton during initial load if loading screen is dismissed */}
         {isInitialLoading && !showLoadingScreen && !error && (
           <SkeletonDashboard />
