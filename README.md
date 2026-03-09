@@ -8,7 +8,6 @@ A full-stack web application for tracking stock portfolio performance with real-
 portfolio-dashboard/
 ├── frontend/          # Next.js frontend application (TypeScript)
 ├── backend/           # Node.js backend service (JavaScript)
-├── .kiro/             # Kiro specs and documentation
 ├── DEPLOYMENT.md      # Production deployment guide
 └── E555815F_58D029050B.xlsx  # Portfolio data file
 ```
