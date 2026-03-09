@@ -6,6 +6,7 @@ import { SectorGroup, AutoRefresh, ErrorBoundary, useToast, LoadingBar, ThemeTog
 import { parseApiErrors } from '@/utils';
 import { Briefcase, TrendingUp, Wallet, Percent } from 'lucide-react';
 import type { Holding, SectorSummary } from '@/types';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // ... existing helper functions (groupHoldingsBySector, SectorGroupSkeleton, EmptyState, ErrorState) ...
 
@@ -309,7 +310,12 @@ function DashboardContent() {
 
         {/* Main Content */}
         {!isLoading && !error && holdings && (
-          <div className="animate-page-enter space-y-8">
+          <motion.div 
+            className="space-y-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          >
 
             {/* Summary Metrics Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 stagger-children">
@@ -393,7 +399,7 @@ function DashboardContent() {
               </p>
               <p className="text-xs">Market data updates every 30 seconds</p>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>

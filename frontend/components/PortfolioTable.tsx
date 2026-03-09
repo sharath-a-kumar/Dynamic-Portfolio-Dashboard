@@ -134,7 +134,7 @@ function formatPercentage(value: number): string {
  */
 function TableHeader() {
   return (
-    <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+    <thead className="bg-zinc-50 dark:bg-zinc-800/50 sticky top-0 z-10 shadow-sm">
       <tr className="text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
         <th className="px-3 py-3 whitespace-nowrap">Particulars</th>
         <th className="px-3 py-3 text-right whitespace-nowrap">Purchase Price</th>
@@ -157,11 +157,12 @@ function TableHeader() {
  * Uses AnimatedValue components for live data fields (CMP, Present Value, Gain/Loss)
  * Requirements: 2.3, 4.2, 4.3, 4.4 - Smooth transitions for value changes
  */
-const HoldingRow = memo(function HoldingRow({ holding }: { holding: Holding }) {
+const HoldingRow = memo(function HoldingRow({ holding, index }: { holding: Holding; index: number }) {
   const gainLossColorClass = getGainLossColorClass(holding.gainLoss);
+  const isEvenRow = index % 2 === 0;
   
   return (
-    <tr className="text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors active:bg-zinc-100 dark:active:bg-zinc-700/50">
+    <tr className={`text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors active:bg-zinc-100 dark:active:bg-zinc-700/50 ${isEvenRow ? 'bg-white dark:bg-zinc-800' : 'bg-zinc-50/50 dark:bg-zinc-800/50'}`}>
       {/* Particulars */}
       <td className="px-3 py-3 text-zinc-900 dark:text-zinc-100 font-medium whitespace-nowrap">
         {holding.particulars}
@@ -399,8 +400,8 @@ function LargePortfolioTable({ holdings }: { holdings: Holding[] }) {
       <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
         <TableHeader />
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
-          {holdings.map((holding) => (
-            <HoldingRow key={holding.id} holding={holding} />
+          {holdings.map((holding, index) => (
+            <HoldingRow key={holding.id} holding={holding} index={index} />
           ))}
         </tbody>
       </table>
@@ -501,8 +502,8 @@ function PortfolioTableComponent({ holdings, isLoading, error }: PortfolioTableP
             <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
               <TableHeader />
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
-                {holdings.map((holding) => (
-                  <HoldingRow key={holding.id} holding={holding} />
+                {holdings.map((holding, index) => (
+                  <HoldingRow key={holding.id} holding={holding} index={index} />
                 ))}
               </tbody>
             </table>

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
+/* Premium Animation Easing Curves */
 :root {
+  /* Smooth easing for UI interactions */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-expo: cubic-bezier(0.87, 0, 0.13, 1);
+  
   /* Premium Light Theme */
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -19,7 +25,7 @@
   --secondary-foreground: #1e293b;
   
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted-foreground: #475569; /* Improved contrast */
   
   --accent: #f8fafc;
   --accent-foreground: #0f172a;
@@ -67,7 +73,7 @@
   --secondary-foreground: #fafafa;
   
   --muted: #1e1e1e;
-  --muted-foreground: #a1a1aa;
+  --muted-foreground: #a1a1aa; /* Slightly brighter for dark mode */
   
   --accent: #1a1a1a;
   --accent-foreground: #fafafa;
@@ -210,7 +216,7 @@ body {
 }
 
 .hover-lift {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .hover-lift:hover {
   transform: translateY(-4px);
@@ -287,7 +293,7 @@ body {
 /* Button Base Styles */
 button {
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 button:disabled {
@@ -296,7 +302,7 @@ button:disabled {
 
 /* Interactive Elements */
 .interactive {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
 
@@ -310,14 +316,14 @@ button:disabled {
 
 /* Smooth Card Transitions */
 .card-smooth {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
               border-color 0.3s ease;
 }
 
 /* Scale on Hover */
 .hover-scale {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hover-scale:hover {
@@ -368,6 +374,81 @@ button:focus-visible {
 /* Smooth Number Transitions (for animated values) */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Value change animations for data updates */
+@keyframes value-change-up {
+  0% {
+    background-color: rgba(16, 185, 129, 0.2);
+    transform: translateY(0);
+  }
+  50% {
+    background-color: rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+  }
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes value-change-down {
+  0% {
+    background-color: rgba(239, 68, 68, 0.2);
+    transform: translateY(0);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.3);
+    transform: translateY(2px);
+  }
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+.value-change-up {
+  animation: value-change-up 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.value-change-down {
+  animation: value-change-down 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.value-arrow-up {
+  color: #10b981;
+  animation: arrow-pulse-up 1s ease-in-out 2;
+}
+
+.value-arrow-down {
+  color: #ef4444;
+  animation: arrow-pulse-down 1s ease-in-out 2;
+}
+
+@keyframes arrow-pulse-up {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 0.7;
+  }
+}
+
+@keyframes arrow-pulse-down {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(3px);
+    opacity: 0.7;
+  }
+}
+
+.value-transition {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Ripple Effect Base */
@@ -480,13 +561,45 @@ button:focus-visible {
 }
 
 .animate-page-enter {
-  animation: page-enter 0.5s ease-out forwards;
+  animation: page-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Smooth reveal animation */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-reveal-up {
+  animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scale-in animation for cards */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Stagger children animations */
 .stagger-children > * {
   opacity: 0;
-  animation: fadeIn 0.4s ease-out forwards;
+  animation: reveal-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
@@ -496,7 +609,61 @@ button:focus-visible {
 .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
 .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
 
-/* Bounce animation for icons */
+/* Smooth hover lift with better shadow */
+.hover-lift {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* Button transitions */
+button {
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Enhanced focus states */
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--primary);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Interactive elements with smooth transitions */
+.interactive {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.interactive:hover {
+  transform: translateY(-2px);
+}
+
+.interactive:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Smooth card transitions */
+.card-smooth {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease;
+}
+
+/* Smooth transitions for all interactive elements */
+a, button, input, select, textarea {
+  transition: color 0.25s ease, 
+              background-color 0.25s ease, 
+              border-color 0.25s ease,
+              box-shadow 0.25s ease,
+              transform 0.25s ease,
+              opacity 0.25s ease;
+}
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
